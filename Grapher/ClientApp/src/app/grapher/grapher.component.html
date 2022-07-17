@@ -1,0 +1,11 @@
+<div>
+  <form (ngSubmit)="getPoints()">
+    <span *ngIf="badEquation" style="color:red">
+      You must enter an equation.
+      <br>
+    </span>
+    <input type="text" placeholder="Enter equation here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
+    <input type="submit">
+  </form>
+  <canvas id="myChart"></canvas>
+</div>
