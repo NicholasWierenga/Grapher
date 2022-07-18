@@ -4,8 +4,30 @@
       You must enter an equation.
       <br>
     </span>
-    <input type="text" placeholder="Enter equation here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
+    <input type="text" placeholder="Enter expression here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
+    <br>
+    <input type="text" placeholder="Lower bound for x-axis" [(ngModel)]="xWindowLowerString"  [ngModelOptions]="{standalone: true}"/>
+    <br>
+    <input type="text" placeholder="Upper bound for x-axis" [(ngModel)]="xWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
+    <br>
+    <input type="text" placeholder="Steps to take on x-axis" [(ngModel)]="xStepsString"  [ngModelOptions]="{standalone: true}"/>
+    <br>
     <input type="submit">
   </form>
+  <br>
+  <div>
+    <p>
+      Below is for trying out an expression quickly and uses pre-defined parameters.
+    </p>
+    <form (ngSubmit)="useTestValues()">
+      <span *ngIf="badEquation" style="color:red">
+        You must enter an equation.
+        <br>
+      </span>
+      <input type="text" placeholder="Enter expression here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
+      <input type="submit" value="Test">
+    </form>
+  </div>
+  
   <canvas id="myChart"></canvas>
 </div>
