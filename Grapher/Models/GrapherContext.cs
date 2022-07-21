@@ -46,6 +46,10 @@ namespace Grapher.Models
                 entity.Property(e => e.Ycoord)
                     .HasMaxLength(80)
                     .HasColumnName("ycoord");
+
+                entity.Property(e => e.Zcoord)
+                    .HasMaxLength(80)
+                    .HasColumnName("zcoord");
             });
 
             OnModelCreatingPartial(modelBuilder);

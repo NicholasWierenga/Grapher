@@ -9,5 +9,6 @@ namespace Grapher.Models
         public string Equation { get; set; } = null!;
         public string Xcoord { get; set; } = null!;
         public string Ycoord { get; set; } = null!;
+        public string? Zcoord { get; set; }
     }
 }
