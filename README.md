@@ -10,6 +10,7 @@ USE Grapher;
 GO
 
 -- Creates our table
+
 CREATE TABLE Point (
     id INTEGER NOT NULL IDENTITY(1, 1) PRIMARY KEY,
     equation NVARCHAR(80) NOT NULL,
@@ -20,7 +21,8 @@ CREATE TABLE Point (
 
 GO
 
--- Outputs your connection string to be used in the GrapherContext.cs folder
+-- Outputs your connection string to be used in the GrapherContext.cs file
+
 select
     'data source=' + @@servername +
     ';initial catalog=' + db_name() +
