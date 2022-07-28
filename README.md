@@ -9,7 +9,7 @@ USE Grapher;
 
 GO
 
--- Creates our tables
+-- Creates our table
 CREATE TABLE Point (
     id INTEGER NOT NULL IDENTITY(1, 1) PRIMARY KEY,
     equation NVARCHAR(80) NOT NULL,
