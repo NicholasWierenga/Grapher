@@ -11,6 +11,8 @@ import { BigNumber } from "bignumber.js";
   styleUrls: ['./grapher.component.css']
 })
 
+
+// TODO: Fix error that occurs for trig functions like 5sin(x).
 export class GrapherComponent implements OnInit {
   // TODO: much of this should be passed directly to getGraphType later on.
   equation: string = "";
@@ -31,31 +33,43 @@ export class GrapherComponent implements OnInit {
     Chart.register(...registerables);
   }
 
-  // TODO: This assumes users are only ever going to enter in functions with numbers, trig functions, x, or y.
-  // Add things for users to graph with different variables like a or b then pass those variables to get3D/2DPoints functions.
-  // Not that important to do and probably is decently complicated, since trig functions contain letters that might be used in the variable.
-  // Probably try using something to check for sin(), cos(), tan(), cosh(), etc in expression then remove until new variables are found.
   getGraphType(): void {
-    // MathJS allows us to graph things like y = x instead of just x, so we want only the expression
-    // in order to determine what variables are being iterated through.
-    let expression: string = this.equation.split("=")[this.equation.split("=").length - 1];
-    this.xStepDelta = new BigNumber(this.xWindowUpperString).minus(this.xWindowLowerString).dividedBy(this.xStepsString);
+    // gives the simplified expression right of = to ensure things like y = x + 2, y = -1 + x + 3, are both turned into x + 2.
+    // mathjs allows for y=5x to be a valid input to graph, but we only want the expression, which is why we use .split("=").
+    let expression: string = this.math.simplify(this.equation.split("=")[this.equation.split("=").length - 1]).toString();
+    let variables: string = this.getVariables(expression);
+    let onlyVariables: string = variables.replace(/\s+/g, "");
     
-    // We pass the expression to the function and not the equation because not doing so would
-    // allow y = x and x to both be present in the database, which would be redudant.
-    // TODO: This implies any function like y = a, y = b, or y = x should all be stored as x.
-    // Consider swapping the new variable letters to being x or y and then saving those to the db,
-    // which would save a bit of space and allow for a wider range of graphs getting already known points.
+    if ((onlyVariables !== "x" && onlyVariables.length === 1) || !(onlyVariables.includes("x") && onlyVariables.includes("y"))
+    || onlyVariables.length === 0) { // checks if expression has valid variables
+      let expressionAndVariables: string[] = this.fixExpressionVariables(expression, variables);
+      expression = expressionAndVariables[0];
+      variables = expressionAndVariables[1];
+    }
+
+    // TODO: Move this to somewhere it belongs. It feels out of place.
+    this.xStepDelta = new BigNumber(this.xWindowUpperString).minus(this.xWindowLowerString).dividedBy(this.xStepsString);
+
     switch (true) {
-      case expression.includes("x") && expression.includes("y"): {
-        console.log("function with x and y found");
-        this.get3DPoints(expression);
+      // TODO: We shouldn't save points to the DB for functions that are constant-valued.
+      // These are very simple, so they don't need to take up DB space.
+      // This should have a seperate method called here that passes data off to the chart without calling DB.
+      case !variables.includes("x") && !variables.includes("y"): {
+        // TODO: for this, change pointsToGraph to addrange a bunch of constant values, then go straight to graph2D.
+        console.log("function of a constant was found");
+        this.get2DPoints(expression);
         break;
       }
 
-      case expression.includes("x") || !Number.isNaN(expression.replace("x", "")): {
-        console.log("function that is constant or has x found");
+      case variables.includes("x") && !variables.includes("y"): {
+        console.log("function of 1 variable was found");
         this.get2DPoints(expression);
+        break;
+      }
+
+      case variables.includes("x") && variables.includes("y"): {
+        console.log("function of 2 variables was found");
+        this.get3DPoints(expression);
         break;
       }
 
@@ -67,6 +81,55 @@ export class GrapherComponent implements OnInit {
       }
     }
   }
+
+  // This takes in our expression and returns what variables the user entered.
+  getVariables(expression: string): string {
+    let variables: string = expression.replace(/[0-9+\-*.(){}\[\]<>^]/g, " ");
+    
+    let toRemove: string[] = ["sinh", "cosh", "sech", "csch", "tanh", "coth",
+    "sin", "cos", "sec", "csc", "tan", "cot"];
+
+    toRemove.forEach(removedString => {
+      while (variables.includes(removedString)) {
+        variables = variables.replace(removedString, "".padEnd(removedString.length, " "));
+      }
+    });
+
+    // variables is typically returned with copies of each variable used and spaces between them
+    // this is meant to be the case, because it retains position of each variable, which is used to fix the variables later on
+    return variables;
+  }
+
+  // Swaps variables in the expression out for x and y, so expression like c+d, g+h, x+j, all turn into and save and retreive
+  // points using the same expression x+y. This is to avoid equations that are functionally the same from needing to
+  // calculate known points again.
+  fixExpressionVariables(expression: string, variables: string): string[] {
+    let varSet: Set<string> = new Set(variables.split(""));
+    let index: number = 0;
+    varSet.delete(" ");
+
+    varSet.forEach(char => { // iterates through each variable used, replacing the non-x/y with x and y.
+      if (char === "x" || (char === "y" && varSet.size !== 1)) {
+        return; // JS likes to call things that should be continue for loops return for whatever reason.
+      }
+      
+      while (variables.includes(char)) {
+        index = variables.indexOf(char);
+
+        if (expression[index] === [...varSet][0]) {
+          expression = expression.substring(0, index) + "x" + expression.substring(index + 1, expression.length);
+          variables = variables.substring(0, index) + "x" + variables.substring(index + 1, variables.length);
+        }
+
+        if (expression[index] === [...varSet][1]) {
+          expression = expression.substring(0, index) + "y" + expression.substring(index + 1, expression.length);
+          variables = variables.substring(0, index) + "y" + variables.substring(index + 1, variables.length);
+        }
+      }
+    });
+
+    return [this.math.simplify(expression).toString(), variables];
+  }
   
   get2DPoints(expression: string): void {
     this.badEquation = false;
@@ -77,7 +140,7 @@ export class GrapherComponent implements OnInit {
       return;
     }
     
-    this.graphService.getPoints(expression).subscribe(points => { // Points is an array of all points from the DB with the current equation.
+    this.graphService.getPoints("y = " + expression).subscribe(points => { // Points is an array of all points from the DB with the current equation.
       // TODO: This gives us an array of points, but usually not the entire graph and makes the graph later on out of order.
       // We then need to sort the array later on. Consider making a new array of points and in the if statement in getXSteps
       // the while loop, insert the found point into pointsToGraph.
@@ -95,7 +158,7 @@ export class GrapherComponent implements OnInit {
       console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
 
       this.getXSteps(new BigNumber(this.xWindowLowerString), new BigNumber(this.xWindowUpperString),
-        new BigNumber(this.xStepsString), this.pointsToGraph, expression);
+        new BigNumber(this.xStepsString), this.pointsToGraph, "y = " + expression);
 
       // Found coords from DB are usually out of order, so can't be graphed. This orders to fix.
       this.pointsToGraph.sort(function(pointA, pointB)  {
@@ -109,7 +172,7 @@ export class GrapherComponent implements OnInit {
   }
 
   // This merges saved points with new points into pointsToGraph and calculates new points along x-step set then sends those to the DB to be saved.
-  getXSteps(beginXVal: BigNumber, endXVal: BigNumber, xSteps: BigNumber, knownPoints: Point[], expression: string): void {
+  getXSteps(beginXVal: BigNumber, endXVal: BigNumber, xSteps: BigNumber, knownPoints: Point[], equation: string): void {
     let newPoints: Point[] = [];
     let currXVal: BigNumber = beginXVal;
 
@@ -122,8 +185,8 @@ export class GrapherComponent implements OnInit {
         continue;
       }
 
-      let newPoint: Point = {id: undefined!, equation: expression, xcoord: currXVal.toString(),
-      ycoord: this.math.evaluate(expression, {x: currXVal.valueOf()}).toString(), zcoord: null}
+      let newPoint: Point = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
+      ycoord: this.math.evaluate(equation, {x: currXVal.valueOf()}).toString(), zcoord: null};
       
       this.pointsToGraph.push(newPoint); // adds new point to the array
       newPoints.push(newPoint);

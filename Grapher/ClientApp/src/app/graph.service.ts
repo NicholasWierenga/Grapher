@@ -18,8 +18,8 @@ export class GraphService {
     this.urlRoot = baseUrl;
   }
 
-  getPoints(expressionToGraph: string): Observable<Point[]> {
-    return this.http.get<Point[]>(this.urlRoot + `grapher/points/${expressionToGraph}`);
+  getPoints(equation: string): Observable<Point[]> {
+    return this.http.get<Point[]>(this.urlRoot + `grapher/points/${equation}`);
   }
 
   createPoints(pointsToAdd: Point[]): Observable<Point[]> {
