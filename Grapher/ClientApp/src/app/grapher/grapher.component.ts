@@ -3,7 +3,6 @@ import { GraphService } from '../graph.service';
 import { Point } from '../point';
 import { Chart, registerables } from 'chart.js';
 import { create, all } from 'mathjs';
-import { BigNumber } from "bignumber.js";
 
 @Component({
   selector: 'app-grapher',
@@ -11,8 +10,6 @@ import { BigNumber } from "bignumber.js";
   styleUrls: ['./grapher.component.css']
 })
 
-
-// TODO: Fix error that occurs for trig functions like 5sin(x).
 export class GrapherComponent implements OnInit {
   // TODO: much of this should be passed directly to getGraphType later on.
   equation: string = "";
@@ -22,11 +19,11 @@ export class GrapherComponent implements OnInit {
   yWindowUpperString: string = "";
   xStepsString: string = "";
   yStepsString: string = "";
-  xStepDelta!: BigNumber;
-  yStepDelta!: BigNumber;
+  xStepDelta!: math.BigNumber;
+  yStepDelta!: math.BigNumber;
   pointsToGraph: Point[] = [];
   badEquation: boolean = false;
-  math = create(all, {number: 'BigNumber'});
+  math = create(all, {number: 'BigNumber'}); // since this is configured to use BigNumber, we might not need to do bignumber conversions
   myChart!: Chart<"line", string[], string>; 
   
   constructor(private graphService: GraphService) { 
@@ -48,7 +45,7 @@ export class GrapherComponent implements OnInit {
     }
 
     // TODO: Move this to somewhere it belongs. It feels out of place.
-    this.xStepDelta = new BigNumber(this.xWindowUpperString).minus(this.xWindowLowerString).dividedBy(this.xStepsString);
+    this.xStepDelta = this.math.bignumber(this.xWindowUpperString).minus(this.xWindowLowerString).dividedBy(this.xStepsString);
 
     switch (true) {
       // TODO: We shouldn't save points to the DB for functions that are constant-valued.
@@ -134,6 +131,7 @@ export class GrapherComponent implements OnInit {
   get2DPoints(expression: string): void {
     this.badEquation = false;
     this.pointsToGraph = [];
+    console.log(expression);
 
     if (expression.trim() === "") {
       this.badEquation = true;
@@ -149,22 +147,20 @@ export class GrapherComponent implements OnInit {
       // push that new point into the pointsToGraph array. The incrementing method is to avoid constantly calling
       // .find on the new array, which would be become extremely slow after retrieving many, many points.
       this.pointsToGraph = points.filter(point => 
-        new BigNumber(point.xcoord).isGreaterThanOrEqualTo(this.xWindowLowerString) && 
-        new BigNumber(point.xcoord).isLessThanOrEqualTo(this.xWindowUpperString) // filters for points in window range
-        && (new BigNumber(point.xcoord).minus(this.xWindowLowerString))
-        .mod(this.xStepDelta).isEqualTo(new BigNumber(0)) // filters points that are in the set of stepped points.
+        this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.xWindowLowerString) && 
+        this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.xWindowUpperString) // filters for points in window range
+        && (this.math.bignumber(point.xcoord).minus(this.xWindowLowerString))
+        .mod(this.xStepDelta).equals("0") // filters points that are in the set of stepped points.
       );
 
       console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
 
-      this.getXSteps(new BigNumber(this.xWindowLowerString), new BigNumber(this.xWindowUpperString),
-        new BigNumber(this.xStepsString), this.pointsToGraph, "y = " + expression);
+      this.getXSteps(this.math.bignumber(this.xWindowLowerString), this.math.bignumber(this.xWindowUpperString),
+      this.math.bignumber(this.xStepsString), this.pointsToGraph, "y = " + expression);
 
       // Found coords from DB are usually out of order, so can't be graphed. This orders to fix.
-      this.pointsToGraph.sort(function(pointA, pointB)  {
-        return new BigNumber(pointA.xcoord).minus(new BigNumber(pointB.xcoord)).s!
-        // .s gives the sign of the difference between the two points, so it'll give 1 or -1 as a number,
-        // which is returned in order to sort the array.
+      this.pointsToGraph.sort((pointA, pointB) => {
+        return this.math.number(this.math.sign(this.math.bignumber(pointA.xcoord).minus(this.math.bignumber(pointB.xcoord))));
       });
 
       this.getGraph();
@@ -172,21 +168,21 @@ export class GrapherComponent implements OnInit {
   }
 
   // This merges saved points with new points into pointsToGraph and calculates new points along x-step set then sends those to the DB to be saved.
-  getXSteps(beginXVal: BigNumber, endXVal: BigNumber, xSteps: BigNumber, knownPoints: Point[], equation: string): void {
+  getXSteps(beginXVal: math.BigNumber, endXVal: math.BigNumber, xSteps: math.BigNumber, knownPoints: Point[], equation: string): void {
     let newPoints: Point[] = [];
-    let currXVal: BigNumber = beginXVal;
+    let currXVal: math.BigNumber = beginXVal;
 
     console.log("Number of steps for this graph: " + xSteps.valueOf());
     console.log("Value of xStepDelta, the amount of distance crossed by each step: " + this.xStepDelta.valueOf());
 
-    while (currXVal.isLessThanOrEqualTo(endXVal)) {
+    while (currXVal.lessThanOrEqualTo(endXVal)) {
       if (knownPoints.some(point => point.xcoord === currXVal.toString())) { // We check if a point already exists here and skip the calculation if it does.
         currXVal = currXVal.plus(this.xStepDelta);
         continue;
       }
 
       let newPoint: Point = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
-      ycoord: this.math.evaluate(equation, {x: currXVal.valueOf()}).toString(), zcoord: null};
+      ycoord: this.math.evaluate(equation, {x: this.math.bignumber(currXVal.valueOf())}).toString(), zcoord: null};
       
       this.pointsToGraph.push(newPoint); // adds new point to the array
       newPoints.push(newPoint);
@@ -264,6 +260,7 @@ export class GrapherComponent implements OnInit {
               max: this.xWindowUpperString
             },
             // If yWindow adjustment is ever needed, below is what will be used.
+            // This will likely only be used for a 3D graph.
             //y: {
             //  min: this.yWindowLowerString,
             //  max: this.yWindowUpperString
@@ -288,6 +285,9 @@ export class GrapherComponent implements OnInit {
   }
 }
 
+// This is an area for TODO's that would be nice to implement, but won't prevent the program from functioning,
+// so they're not terribly important.
+
 // Later TODO: It'd be cool to add to the DB after the user calculated a certain amount of new points
 // This would be for really computationally heavy tasks and so the user could terminate the program,
 // but all points but for a handful toward the end would still be found in the DB.
@@ -296,3 +296,10 @@ export class GrapherComponent implements OnInit {
 // This would look like below
 // if (newPoints.length() >= 1000) then createPoints(newPoints) then newPoints = []
 // This isn't complicated to do, but should be saved for when the program is functional so it doesn't interfere with testing.
+
+// Later TODO: A function like sin(x)+cos(x*(sin(x))) will work, but the functions sin(x)+cos(x(sin(x))) and sin(x)+cos(xsin(x)).
+// but I would like those to work also. MathJS can do .simplify() to get rid of redundant ()'s, but it would be nice to add something
+// into the program that identifies that xsin(x) means x*sin(x). This would probably look something like identifying that x is next
+// to a non-variable letter, which indicates it's meant to act as a multiple of some function. This could be done by instead of
+// searching through and spacing-out found trig functions, we give some other value like # and so we check if # is consecutive to
+// x and if so, we simply put a * between them.
