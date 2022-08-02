@@ -1,14 +1,16 @@
 import { Component, OnInit } from '@angular/core';
 import { GraphService } from '../graph.service';
 import { Point } from '../point';
-import { Chart, registerables } from 'chart.js';
 import { create, all } from 'mathjs';
+import * as PlotlyJS from 'plotly.js-dist';
 
 @Component({
   selector: 'app-grapher',
   templateUrl: './grapher.component.html',
   styleUrls: ['./grapher.component.css']
 })
+
+// TODO: BigNumberJS is still installed. npm uninstall BigNumber later.
 
 export class GrapherComponent implements OnInit {
   // TODO: much of this should be passed directly to getGraphType later on.
@@ -23,11 +25,9 @@ export class GrapherComponent implements OnInit {
   yStepDelta!: math.BigNumber;
   pointsToGraph: Point[] = [];
   badEquation: boolean = false;
-  math = create(all, {number: 'BigNumber'}); // since this is configured to use BigNumber, we might not need to do bignumber conversions
-  myChart!: Chart<"line", string[], string>; 
+  math = create(all, {number: 'BigNumber'});
   
-  constructor(private graphService: GraphService) { 
-    Chart.register(...registerables);
+  constructor(private graphService: GraphService) {
   }
 
   getGraphType(): void {
@@ -50,7 +50,7 @@ export class GrapherComponent implements OnInit {
     switch (true) {
       // TODO: We shouldn't save points to the DB for functions that are constant-valued.
       // These are very simple, so they don't need to take up DB space.
-      // This should have a seperate method called here that passes data off to the chart without calling DB.
+      // This should have a separate method called here that passes data off to the chart without calling DB.
       case !variables.includes("x") && !variables.includes("y"): {
         // TODO: for this, change pointsToGraph to addrange a bunch of constant values, then go straight to graph2D.
         console.log("function of a constant was found");
@@ -97,7 +97,7 @@ export class GrapherComponent implements OnInit {
     return variables;
   }
 
-  // Swaps variables in the expression out for x and y, so expression like c+d, g+h, x+j, all turn into and save and retreive
+  // Swaps variables in the expression out for x and y, so expression like c+d, g+h, x+j, all turn into and save and retrieve
   // points using the same expression x+y. This is to avoid equations that are functionally the same from needing to
   // calculate known points again.
   fixExpressionVariables(expression: string, variables: string): string[] {
@@ -105,9 +105,9 @@ export class GrapherComponent implements OnInit {
     let index: number = 0;
     varSet.delete(" ");
 
-    varSet.forEach(char => { // iterates through each variable used, replacing the non-x/y with x and y.
+    varSet.forEach(char => { // Iterates through each variable used, replacing the non-x/y with x and y.
       if (char === "x" || (char === "y" && varSet.size !== 1)) {
-        return; // JS likes to call things that should be continue for loops return for whatever reason.
+        return; // This is JS's way of doing continue in a for loop.
       }
       
       while (variables.includes(char)) {
@@ -139,18 +139,17 @@ export class GrapherComponent implements OnInit {
     }
     
     this.graphService.getPoints("y = " + expression).subscribe(points => { // Points is an array of all points from the DB with the current equation.
-      // TODO: This gives us an array of points, but usually not the entire graph and makes the graph later on out of order.
-      // We then need to sort the array later on. Consider making a new array of points and in the if statement in getXSteps
-      // the while loop, insert the found point into pointsToGraph.
-      // This could be done by 1) making a new array that takes the below filter, 2) sort that array and past to getXSteps,
-      // 3) keep track of point(probably by incrementing some number each time the if is true) in the array and
-      // push that new point into the pointsToGraph array. The incrementing method is to avoid constantly calling
-      // .find on the new array, which would be become extremely slow after retrieving many, many points.
+      // TODO: This filter usually won't retrieve all the needed points and when we go to calculate more points we have to
+      // do a .some() to check if the point already exists. This needs to be called many times for larger point graphs, which
+      // can slow the program down. Consider adding something to the filter below that will check if the the point exists, and if
+      // it does, then remove that from the array of needed xCoords for the graph. The xCoords array would then contain only
+      // those points needing to be calculated, which means we won't have to run the .some() constantly, which will hopefully
+      // not be as slow.
       this.pointsToGraph = points.filter(point => 
-        this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.xWindowLowerString) && 
-        this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.xWindowUpperString) // filters for points in window range
-        && (this.math.bignumber(point.xcoord).minus(this.xWindowLowerString))
-        .mod(this.xStepDelta).equals("0") // filters points that are in the set of stepped points.
+        this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.math.bignumber(this.xWindowLowerString)) && 
+        this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString)) // filters for points in window range
+        && (this.math.bignumber(point.xcoord).minus(this.math.bignumber(this.xWindowLowerString)))
+        .mod(this.math.bignumber(this.xStepDelta)).equals(this.math.bignumber("0")) // filters points that are in the set of stepped points.
       );
 
       console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
@@ -182,7 +181,7 @@ export class GrapherComponent implements OnInit {
       }
 
       let newPoint: Point = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
-      ycoord: this.math.evaluate(equation, {x: this.math.bignumber(currXVal.valueOf())}).toString(), zcoord: null};
+      ycoord: this.math.evaluate(equation, {x: this.math.bignumber(currXVal)}).toString(), zcoord: null};
       
       this.pointsToGraph.push(newPoint); // adds new point to the array
       newPoints.push(newPoint);
@@ -236,38 +235,23 @@ export class GrapherComponent implements OnInit {
   }
   
   // TODO: This only is for 2d graphs. Consider making something that handles for cases involving 2 variables.
+  // We shouldn't need to have two separate functions to graph 2d and graph 3d, consider passing from get2D/3DPoints
+  // functions the strings "2d" and "3d", respectively.
   getGraph(): void {
-    if (this.myChart instanceof Chart){ // We need to destroy the graph before we can display another.
-      this.myChart.destroy();
-    }
+    var traces: PlotlyJS.Data = {
+      x: this.pointsToGraph.map(point => point.xcoord),
+      y: this.pointsToGraph.map(point => point.ycoord),
+      mode: "lines+markers"
+    };
 
-    // Line Chart
-    const lineCanvasEle: any = document.getElementById('myChart');
-    this.myChart = new Chart(lineCanvasEle.getContext('2d'), {
-      type: 'line',
-        data: {
-          labels: this.pointsToGraph.map(point => point.xcoord),
-          datasets: [
-            { data: this.pointsToGraph.map(point => point.ycoord), label: 'Value', borderColor: 'rgba(0, 0, 0)' }
-          ],
-        },
-        options: {
-          responsive: true,
-          scales: {
-            // the x window here is likely not needed as ChartJS can decide the windowing automatically based on the data
-            x: {
-              min: this.xWindowLowerString,
-              max: this.xWindowUpperString
-            },
-            // If yWindow adjustment is ever needed, below is what will be used.
-            // This will likely only be used for a 3D graph.
-            //y: {
-            //  min: this.yWindowLowerString,
-            //  max: this.yWindowUpperString
-            //}
-          }
-        }
-    });
+    let layout = {
+      title: `${this.pointsToGraph[0].equation}`
+    };
+
+    let data: PlotlyJS.Data[] = [traces];
+
+    const myPlot: HTMLElement = document.getElementById('plotlyChart')!;
+    PlotlyJS.newPlot(myPlot, data, layout);
   }
 
   useTestValues(): void { // This is simply to avoid having to enter all parameters every time.
@@ -288,7 +272,7 @@ export class GrapherComponent implements OnInit {
 // This is an area for TODO's that would be nice to implement, but won't prevent the program from functioning,
 // so they're not terribly important.
 
-// Later TODO: It'd be cool to add to the DB after the user calculated a certain amount of new points
+// TODO: It'd be cool to add to the DB after the user calculated a certain amount of new points
 // This would be for really computationally heavy tasks and so the user could terminate the program,
 // but all points but for a handful toward the end would still be found in the DB.
 // This allows for users to not have to finish the task all at once and keep 'chipping away' at a graph
@@ -297,9 +281,13 @@ export class GrapherComponent implements OnInit {
 // if (newPoints.length() >= 1000) then createPoints(newPoints) then newPoints = []
 // This isn't complicated to do, but should be saved for when the program is functional so it doesn't interfere with testing.
 
-// Later TODO: A function like sin(x)+cos(x*(sin(x))) will work, but the functions sin(x)+cos(x(sin(x))) and sin(x)+cos(xsin(x)).
+// TODO: A function like sin(x)+cos(x*(sin(x))) will work, but the functions sin(x)+cos(x(sin(x))) and sin(x)+cos(xsin(x)).
 // but I would like those to work also. MathJS can do .simplify() to get rid of redundant ()'s, but it would be nice to add something
 // into the program that identifies that xsin(x) means x*sin(x). This would probably look something like identifying that x is next
 // to a non-variable letter, which indicates it's meant to act as a multiple of some function. This could be done by instead of
-// searching through and spacing-out found trig functions, we give some other value like # and so we check if # is consecutive to
-// x and if so, we simply put a * between them.
+// searching through and spacing-out found trig functions, we give some other value like # and so we check if # is adjacent
+// x. If so, we simply put a * between them and then the program won't error out and cause the user to have to put the * themself.
+
+// TODO: Implement some logic that replaces the need for the user to define how many steps to take. This would look like finding the
+// derivative of the inputted function and comparing the value of the derivative at the previous point and the current point. If
+// the difference between the too is too large, pick the point between the two and try again until the values are close enough. 

@@ -25,4 +25,5 @@ import { GrapherComponent } from './grapher/grapher.component';
   providers: [],
   bootstrap: [AppComponent]
 })
+
 export class AppModule { }
