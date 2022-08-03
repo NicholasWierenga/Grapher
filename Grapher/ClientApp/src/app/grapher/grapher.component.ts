@@ -13,7 +13,7 @@ import * as PlotlyJS from 'plotly.js-dist';
 // TODO: BigNumberJS is still installed. npm uninstall BigNumber later.
 
 export class GrapherComponent implements OnInit {
-  // TODO: much of this should be passed directly to getGraphType later on.
+  // TODO: Much of this should be passed directly to getGraphType later on.
   equation: string = "";
   xWindowLowerString: string = "";
   xWindowUpperString: string = "";
@@ -24,7 +24,6 @@ export class GrapherComponent implements OnInit {
   xStepDelta!: math.BigNumber;
   yStepDelta!: math.BigNumber;
   pointsToGraph: Point[] = [];
-  badEquation: boolean = false;
   math = create(all, {number: 'BigNumber'});
   
   constructor(private graphService: GraphService) {
@@ -46,6 +45,7 @@ export class GrapherComponent implements OnInit {
 
     // TODO: Move this to somewhere it belongs. It feels out of place.
     this.xStepDelta = this.math.bignumber(this.xWindowUpperString).minus(this.xWindowLowerString).dividedBy(this.xStepsString);
+    this.yStepDelta = this.math.bignumber(this.yWindowUpperString).minus(this.yWindowLowerString).dividedBy(this.xStepsString);
 
     switch (true) {
       // TODO: We shouldn't save points to the DB for functions that are constant-valued.
@@ -129,120 +129,145 @@ export class GrapherComponent implements OnInit {
   }
   
   get2DPoints(expression: string): void {
-    this.badEquation = false;
     this.pointsToGraph = [];
-    console.log(expression);
-
-    if (expression.trim() === "") {
-      this.badEquation = true;
-      return;
-    }
     
-    this.graphService.getPoints("y = " + expression).subscribe(points => { // Points is an array of all points from the DB with the current equation.
-      // TODO: This filter usually won't retrieve all the needed points and when we go to calculate more points we have to
-      // do a .some() to check if the point already exists. This needs to be called many times for larger point graphs, which
-      // can slow the program down. Consider adding something to the filter below that will check if the the point exists, and if
-      // it does, then remove that from the array of needed xCoords for the graph. The xCoords array would then contain only
-      // those points needing to be calculated, which means we won't have to run the .some() constantly, which will hopefully
-      // not be as slow.
-      this.pointsToGraph = points.filter(point => 
-        this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.math.bignumber(this.xWindowLowerString)) && 
-        this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString)) // filters for points in window range
-        && (this.math.bignumber(point.xcoord).minus(this.math.bignumber(this.xWindowLowerString)))
-        .mod(this.math.bignumber(this.xStepDelta)).equals(this.math.bignumber("0")) // filters points that are in the set of stepped points.
-      );
-
+    this.graphService.getPoints("y = " + expression).subscribe(points => {
+      this.pointsToGraph = this.filterPoints(points, expression);
       console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
 
-      this.getXSteps(this.math.bignumber(this.xWindowLowerString), this.math.bignumber(this.xWindowUpperString),
-      this.math.bignumber(this.xStepsString), this.pointsToGraph, "y = " + expression);
+      // The below if statement will be removed later. It's currently a fix for the issue of .some() being called
+      // too many times and causing graphs to appear slower than if they were calculated from scratch.
+      if (this.pointsToGraph.length < parseInt(this.xStepsString) + 1) {
+        let calculatedPoints: Point[] = this.getNewPoints(this.pointsToGraph, expression);
 
-      // Found coords from DB are usually out of order, so can't be graphed. This orders to fix.
-      this.pointsToGraph.sort((pointA, pointB) => {
-        return this.math.number(this.math.sign(this.math.bignumber(pointA.xcoord).minus(this.math.bignumber(pointB.xcoord))));
-      });
+        this.pointsToGraph = this.pointsToGraph.concat(calculatedPoints);
+      }
 
       this.getGraph();
     });
   }
 
-  // This merges saved points with new points into pointsToGraph and calculates new points along x-step set then sends those to the DB to be saved.
-  getXSteps(beginXVal: math.BigNumber, endXVal: math.BigNumber, xSteps: math.BigNumber, knownPoints: Point[], equation: string): void {
-    let newPoints: Point[] = [];
-    let currXVal: math.BigNumber = beginXVal;
-
-    console.log("Number of steps for this graph: " + xSteps.valueOf());
-    console.log("Value of xStepDelta, the amount of distance crossed by each step: " + this.xStepDelta.valueOf());
-
-    while (currXVal.lessThanOrEqualTo(endXVal)) {
-      if (knownPoints.some(point => point.xcoord === currXVal.toString())) { // We check if a point already exists here and skip the calculation if it does.
-        currXVal = currXVal.plus(this.xStepDelta);
-        continue;
+  // Not yet done.
+  get3DPoints(expression: string): void {
+    this.pointsToGraph = [];
+    
+    this.graphService.getPoints("z = " + expression).subscribe(points => {
+      this.pointsToGraph = this.filterPoints(points, expression);
+      console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
+      
+      if (this.pointsToGraph.length < (parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)) {
+        let calculatedPoints: Point[] = this.getNewPoints(this.pointsToGraph, expression);
+        
+        this.pointsToGraph = this.pointsToGraph.concat(calculatedPoints);
       }
 
-      let newPoint: Point = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
-      ycoord: this.math.evaluate(equation, {x: this.math.bignumber(currXVal)}).toString(), zcoord: null};
-      
-      this.pointsToGraph.push(newPoint); // adds new point to the array
-      newPoints.push(newPoint);
+      this.getGraph();
+    });
+  }
 
+  // This filters out points depending on the user's amount of steps and windows for x and y.
+  filterPoints(points: Point[], expression: string): Point[] {
+    if (expression.includes("z")) { // filters points for 3d graphs
+      return points.filter(point => 
+        this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.math.bignumber(this.xWindowLowerString)) &&  // filters for x window
+        this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString))
+        && (this.math.bignumber(point.xcoord).minus(this.math.bignumber(this.xWindowLowerString)))
+        .mod(this.math.bignumber(this.xStepDelta)).equals(this.math.bignumber("0")) && // filters for xcoords that are along the step values
+        this.math.bignumber(point.ycoord).greaterThanOrEqualTo(this.math.bignumber(this.yWindowLowerString)) && // same as above, but for y
+        this.math.bignumber(point.ycoord).lessThanOrEqualTo(this.math.bignumber(this.yWindowUpperString)) 
+        && (this.math.bignumber(point.ycoord).minus(this.math.bignumber(this.yWindowLowerString)))
+        .mod(this.math.bignumber(this.yStepDelta)).equals(this.math.bignumber("0")) 
+      );
+    }
+    else { // filters for 2d
+      return points.filter(point => 
+        this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.math.bignumber(this.xWindowLowerString)) && 
+        this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString))
+        && (this.math.bignumber(point.xcoord).minus(this.math.bignumber(this.xWindowLowerString)))
+        .mod(this.math.bignumber(this.xStepDelta)).equals(this.math.bignumber("0"))
+      );
+    }
+    
+  }
+
+  // This merges saved points with new points into pointsToGraph and calculates new points along x-step set then sends those to the DB to be saved.
+  getNewPoints(knownPoints: Point[], expression: string): Point[] {
+    let newPoints: Point[] = [];
+    let currXVal: math.BigNumber = this.math.bignumber(this.xWindowLowerString);
+    let currYVal: math.BigNumber = this.math.bignumber(this.yWindowLowerString);
+    let is3D: boolean = expression.includes("y");
+
+    console.log(`Number of x steps for this graph: ${this.xStepsString}.`);
+    console.log(`Number of y steps for this graph: ${this.yStepsString}.`);
+    console.log(`Value of xStepDelta, the amount of distance crossed by each step: ${this.xStepDelta.toString()}`);
+    console.log(`Value of yStepDelta, the amount of distance crossed by each step: ${this.yStepDelta.toString()}`);
+
+    // TODO: The .some() causes noticeable slowdowns when graphing 3d functions. Do something like create an object with all needed
+    // coords, remove everything from the knownPoints in that new array, then iterate through the new array to avoid the .some()
+    // being called thousands of times.
+    while (currXVal.lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString))) {
+      if (is3D) {
+        while (currYVal.lessThanOrEqualTo(this.math.bignumber(this.yWindowUpperString))) {
+          if (knownPoints.some(point => point.xcoord === currXVal.toString() && point.ycoord === currYVal.toString())) {
+            currYVal = currYVal.plus(this.yStepDelta);
+            continue;
+          }
+
+          let newPoint: Point = {id: undefined!, equation: "z = " + expression, xcoord: currXVal.toString(),
+            ycoord: currYVal.toString(), zcoord: this.math.evaluate(expression,
+            {x: this.math.bignumber(currXVal), y: this.math.bignumber(currYVal)}).toString()};
+
+          newPoints.push(newPoint);
+      
+          currYVal = currYVal.plus(this.yStepDelta);
+        }
+
+        currYVal = this.math.bignumber(this.yWindowLowerString);
+      }
+      else {
+        if (knownPoints.some(point => point.xcoord === currXVal.toString())) { // We check if a point already exists here and skip the calculation if it does.
+          currXVal = currXVal.plus(this.xStepDelta);
+          continue;
+        }
+
+        let newPoint: Point = {id: undefined!, equation: "y = " + expression, xcoord: currXVal.toString(),
+          ycoord: this.math.evaluate(expression, {x: this.math.bignumber(currXVal)}).toString(), zcoord: null};
+      
+        newPoints.push(newPoint);
+      }
+      
       currXVal = currXVal.plus(this.xStepDelta);
     }
 
     this.graphService.createPoints(newPoints).subscribe(() => { // Updates db with newly found points.
       console.log("Newly calculated points: " + newPoints.length);
     });
-  }
-
-  // Not yet done.
-  get3DPoints(expression: string): void {
-  //  this.badEquation = false;
-  //  this.pointsToGraph = [];
-  //  let newPoints: Point[] = [];
-  //  let xWindowLower: BigNumber = new BigNumber(this.xWindowLowerString);
-  //  let xWindowUpper: BigNumber = new BigNumber(this.xWindowUpperString);
-  //  let yWindowLower: BigNumber = new BigNumber(this.yWindowLowerString);
-  //  let yWindowUpper: BigNumber = new BigNumber(this.yWindowUpperString);
-  //  let xSteps: BigNumber = new BigNumber(this.xStepsString);
-  //  let ySteps: BigNumber = new BigNumber(this.yStepsString);
-  //  let currXVal: BigNumber = xWindowLower;
-  //  let currYVal: BigNumber = yWindowLower;
-  //  let xStepDelta: BigNumber = new BigNumber(xWindowUpper.minus(xWindowLower).dividedBy(xSteps)); // to know how far to travel on x-axis before calculating new point
-  //
-  //  console.log("Number of steps for this graph: " + xSteps.valueOf());
-  //  console.log("Value of xStepDelta, the amount of distance crossed by each step: " + xStepDelta.valueOf());
-  //
-  //  if (expression.trim() === "") {
-  //    this.badEquation = true;
-  //    return;
-  //  }
-  //  
-  //  this.graphService.getPoints(expression).subscribe(points => { // Points is an array of all points from the DB with the current equation.
-  //    // filter points array here for points matching xcoord and ycoord params
-  //
-  //    console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
-  //
-  //    // getXSteps here, everytime they complete one 2d curve, increment currYVal by yStepDelta and do again until done
-  //
-  //    this.graphService.createPoints(newPoints).subscribe(() => { // Updates db with newly found points.
-  //      console.log("Newly calculated points: " + newPoints.length);
-  //
-  //      // sort function by xcoord then ycoord here
-  //
-  //      this.getGraph();
-  //      });
-  //  } );
+    
+    return newPoints;
   }
   
-  // TODO: This only is for 2d graphs. Consider making something that handles for cases involving 2 variables.
-  // We shouldn't need to have two separate functions to graph 2d and graph 3d, consider passing from get2D/3DPoints
-  // functions the strings "2d" and "3d", respectively.
   getGraph(): void {
-    var traces: PlotlyJS.Data = {
-      x: this.pointsToGraph.map(point => point.xcoord),
-      y: this.pointsToGraph.map(point => point.ycoord),
-      mode: "lines+markers"
-    };
+    console.log("Total points: " + this.pointsToGraph.length);
+
+    // TODO: Because the array isn't split up, Plotly makes everything into one huge line that screws up graphs like
+    // x^2 + y^2. This is because when a line reaches the end of a window, a part of it points back to the start of the next
+    // line, which is always a straight line. This only occurs when the x-value changes, not for y-values.
+    if (this.pointsToGraph[0].equation.includes("z")) {
+      var traces: PlotlyJS.Data = {
+        x: this.pointsToGraph.map(point => point.xcoord),
+        y: this.pointsToGraph.map(point => point.ycoord),
+        z: this.pointsToGraph.map(point => point.zcoord),
+        mode: "lines",
+        type: "scatter3d"
+      };
+    }
+    else {
+      var traces: PlotlyJS.Data = {
+        x: this.pointsToGraph.map(point => point.xcoord),
+        y: this.pointsToGraph.map(point => point.ycoord),
+        type: 'scatter'
+      };
+    }
 
     let layout = {
       title: `${this.pointsToGraph[0].equation}`
