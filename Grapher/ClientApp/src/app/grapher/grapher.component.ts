@@ -10,7 +10,8 @@ import * as PlotlyJS from 'plotly.js-dist';
   styleUrls: ['./grapher.component.css']
 })
 
-// TODO: BigNumberJS is still installed. npm uninstall BigNumber later.
+// TODO: There is a 404 error when doing something like -1.1x + y and the program interprets -1.1x as -(110 * x * y).
+// I believe this has something to do with a malformed URL request, because 1.1x works fine and so does -1.0x.
 
 export class GrapherComponent implements OnInit {
   // TODO: Much of this should be passed directly to getGraphType later on.
@@ -249,19 +250,41 @@ export class GrapherComponent implements OnInit {
   getGraph(): void {
     console.log("Total points: " + this.pointsToGraph.length);
 
-    // TODO: Because the array isn't split up, Plotly makes everything into one huge line that screws up graphs like
-    // x^2 + y^2. This is because when a line reaches the end of a window, a part of it points back to the start of the next
-    // line, which is always a straight line. This only occurs when the x-value changes, not for y-values.
     if (this.pointsToGraph[0].equation.includes("z")) {
+      let splitPoints: Point[][] = [];
+      let skipAmount: number = parseInt(this.xStepsString) + 1;
+
+      this.pointsToGraph.sort((pointA, pointB) => {
+        return this.math.number(this.math.sign(this.math.bignumber(pointA.xcoord).minus(this.math.bignumber(pointB.xcoord)))
+        );
+      });
+
+      // TODO: This copying is a temporary fix for a previous todo. Change around some logic so we aren't populating
+      // splitPoints through removing elements from pointsToGraph. This fix was just to call this.pointsToGraph[0].equation
+      // in layout below.
+      let copyOfPoints: Point[] = [];
+      Object.assign(copyOfPoints, this.pointsToGraph);
+
+      // Because we sorted pointsToGraph by xcoord, we can split it apart into a number of arrays, each with the same xcoord
+      while (splitPoints.length < parseInt(this.yStepsString) + 1) {
+        splitPoints.push(this.pointsToGraph.splice(0, skipAmount));
+      }
+
+      this.pointsToGraph = copyOfPoints;
+
+      // PlotlyJS likes to have 3d graph data that is split up into a number of arrays, each one signifying a line.
+      // For here, since we sorted by xcoord above, splitPoints[0] would correspond to the line of x,y,z coords where x=xWindowLowerString.
+      // Without splitting the array, PlotlyJS assumes everything is contained on one great big line and starts connecting points and forming
+      // surfaces together, often causing false surfaces in the output.
       var traces: PlotlyJS.Data = {
-        x: this.pointsToGraph.map(point => point.xcoord),
-        y: this.pointsToGraph.map(point => point.ycoord),
-        z: this.pointsToGraph.map(point => point.zcoord),
-        mode: "lines",
-        type: "scatter3d"
+        x: splitPoints.map(pointArray => pointArray.map(point => point.xcoord)),
+        y: splitPoints.map(pointArray => pointArray.map(point => point.ycoord)),
+        z: splitPoints.map(pointArray => pointArray.map(point => point.zcoord)),
+        type: "surface"
       };
     }
     else {
+
       var traces: PlotlyJS.Data = {
         x: this.pointsToGraph.map(point => point.xcoord),
         y: this.pointsToGraph.map(point => point.ycoord),
