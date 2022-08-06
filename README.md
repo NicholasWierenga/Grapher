@@ -19,27 +19,27 @@ GO
 
 -- Creates our table
 
-CREATE TABLE Point (
-    id INTEGER NOT NULL IDENTITY(1, 1) PRIMARY KEY,
-    equation NVARCHAR(80) NOT NULL,
-    xcoord NVARCHAR(80) NOT NULL,
-    ycoord NVARCHAR(80) NOT NULL,
-    zcoord NVARCHAR(80)
+CREATE TABLE Point ( <br />
+    id INTEGER NOT NULL IDENTITY(1, 1) PRIMARY KEY, <br />
+    equation NVARCHAR(80) NOT NULL, <br />
+    xcoord NVARCHAR(80) NOT NULL, <br />
+    ycoord NVARCHAR(80) NOT NULL, <br />
+    zcoord NVARCHAR(80) <br />
 )
 
 GO
 
 -- Outputs your connection string to be used in the GrapherContext.cs file
 
-select
-    'data source=' + @@servername +
-    ';initial catalog=' + db_name() +
-    case type_desc
-        when 'WINDOWS_LOGIN' 
-            then ';trusted_connection=true'
-        else
-            ';user id=' + suser_name() + ';password=<<YourPassword>>'
-    end
-    as ConnectionString
-from sys.server_principals
+select <br />
+    'data source=' + @@servername + <br />
+    ';initial catalog=' + db_name() + <br />
+    case type_desc <br />
+        when 'WINDOWS_LOGIN'  <br />
+            then ';trusted_connection=true' <br />
+        else <br />
+            ';user id=' + suser_name() + ';password=<<YourPassword>>' <br />
+    end <br />
+    as ConnectionString <br />
+from sys.server_principals <br />
 where name = suser_name()
