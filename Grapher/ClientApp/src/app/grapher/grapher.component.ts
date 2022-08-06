@@ -12,7 +12,7 @@ import * as PlotlyJS from 'plotly.js-dist';
 
 export class GrapherComponent implements OnInit {
   // TODO: Much of this should be passed directly to getGraphType later on.
-  equation: string = "-2.1x";
+  equation: string = "";
   xWindowLowerString: string = "";
   xWindowUpperString: string = "";
   yWindowLowerString: string = "";
@@ -37,7 +37,6 @@ export class GrapherComponent implements OnInit {
     if ((onlyVariables !== "x" && onlyVariables.length === 1) || !(onlyVariables.includes("x") && onlyVariables.includes("y"))
     || onlyVariables.length === 0) { // checks if expression has valid variables
       let expressionAndVariables: string[] = this.fixExpressionVariables(expression, variables);
-      console.log(expressionAndVariables);
       expression = expressionAndVariables[0];
       variables = expressionAndVariables[1];
     }
@@ -45,37 +44,8 @@ export class GrapherComponent implements OnInit {
     // TODO: Move this to somewhere it belongs. It feels out of place.
     this.xStepDelta = this.math.bignumber(this.xWindowUpperString).minus(this.xWindowLowerString).dividedBy(this.xStepsString);
     this.yStepDelta = this.math.bignumber(this.yWindowUpperString).minus(this.yWindowLowerString).dividedBy(this.xStepsString);
-
-    switch (true) {
-      // TODO: We shouldn't save points to the DB for functions that are constant-valued.
-      // These are very simple, so they don't need to take up DB space.
-      // This should have a separate method called here that passes data off to the chart without calling DB.
-      case !variables.includes("x") && !variables.includes("y"): {
-        // TODO: for this, change pointsToGraph to addrange a bunch of constant values, then go straight to graph2D.
-        console.log("function of a constant was found");
-        this.get2DPoints(expression);
-        break;
-      }
-
-      case variables.includes("x") && !variables.includes("y"): {
-        console.log("function of 1 variable was found");
-        this.get2DPoints(expression);
-        break;
-      }
-
-      case variables.includes("x") && variables.includes("y"): {
-        console.log("function of 2 variables was found");
-        this.get3DPoints(expression);
-        break;
-      }
-
-      default: {
-        console.log("An error occurred. This function is invalid.");
-        console.log("The equation inputted: " + this.equation);
-        console.log("The expression found: " + expression);
-        break;
-      }
-    }
+    
+    this.getAllPoints(expression);
   }
 
   // This takes in our expression and returns what variables the user entered.
@@ -112,7 +82,7 @@ export class GrapherComponent implements OnInit {
       while (variables.includes(char)) {
         index = variables.indexOf(char);
 
-        if (expression[index] === [...varSet][0]) {
+        if (expression[index] === [...varSet][0]) { // [...varSet] turns the set into an array
           expression = expression.substring(0, index) + "x" + expression.substring(index + 1, expression.length);
           variables = variables.substring(0, index) + "x" + variables.substring(index + 1, variables.length);
         }
@@ -126,36 +96,38 @@ export class GrapherComponent implements OnInit {
 
     return [this.math.simplify(expression).toString(), variables];
   }
-  
-  get2DPoints(expression: string): void {
+
+  getAllPoints(expression: string): void {
     this.pointsToGraph = [];
+    let graphType: string = "-1";
+    let equation: string = "";
+
+    if (expression.includes("x") && expression.includes("y")){
+      graphType = "3D";
+      equation = `z = ${expression}`;
+    }
+    else if (expression.includes("x")) {
+      graphType = "2D";
+      equation = `y = ${expression}`;
+    }
+    else {
+      // This is for constant-valued functions. Because they're so simple, there's little sense is storing them to the DB.
+      graphType = "constant";
+      this.pointsToGraph = this.getNewPoints(this.pointsToGraph, `y = ${expression}`, graphType);
+
+      this.getGraph();
+
+      return;
+    }
     
-    this.graphService.getPoints("y = " + expression).subscribe(points => {
+    this.graphService.getPoints(equation).subscribe(points => {
       this.pointsToGraph = this.filterPoints(points, expression);
       console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
 
       // The below if statement will be removed later. It's currently a fix for the issue of .some() being called
       // too many times and causing graphs to appear slower than if they were calculated from scratch.
-      if (this.pointsToGraph.length < parseInt(this.xStepsString) + 1) {
-        let calculatedPoints: Point[] = this.getNewPoints(this.pointsToGraph, expression);
-
-        this.pointsToGraph = this.pointsToGraph.concat(calculatedPoints);
-      }
-
-      this.getGraph();
-    });
-  }
-
-  // Not yet done.
-  get3DPoints(expression: string): void {
-    this.pointsToGraph = [];
-    
-    this.graphService.getPoints("z = " + expression).subscribe(points => {
-      this.pointsToGraph = this.filterPoints(points, expression);
-      console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
-      
       if (this.pointsToGraph.length < (parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)) {
-        let calculatedPoints: Point[] = this.getNewPoints(this.pointsToGraph, expression);
+        let calculatedPoints: Point[] = this.getNewPoints(this.pointsToGraph, equation, graphType);
         
         this.pointsToGraph = this.pointsToGraph.concat(calculatedPoints);
       }
@@ -165,8 +137,8 @@ export class GrapherComponent implements OnInit {
   }
 
   // This filters out points depending on the user's amount of steps and windows for x and y.
-  filterPoints(points: Point[], expression: string): Point[] {
-    if (expression.includes("z")) { // filters points for 3d graphs
+  filterPoints(points: Point[], graphType: string): Point[] {
+    if (graphType == "3D") {
       return points.filter(point => 
         this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.math.bignumber(this.xWindowLowerString)) &&  // filters for x window
         this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString))
@@ -186,34 +158,27 @@ export class GrapherComponent implements OnInit {
         .mod(this.math.bignumber(this.xStepDelta)).equals(this.math.bignumber("0"))
       );
     }
-    
   }
 
   // This merges saved points with new points into pointsToGraph and calculates new points along x-step set then sends those to the DB to be saved.
-  getNewPoints(knownPoints: Point[], expression: string): Point[] {
+  getNewPoints(knownPoints: Point[], equation: string, graphType: string): Point[] {
     let newPoints: Point[] = [];
     let currXVal: math.BigNumber = this.math.bignumber(this.xWindowLowerString);
     let currYVal: math.BigNumber = this.math.bignumber(this.yWindowLowerString);
-    let is3D: boolean = expression.includes("y");
-
-    console.log(`Number of x steps for this graph: ${this.xStepsString}.`);
-    console.log(`Number of y steps for this graph: ${this.yStepsString}.`);
-    console.log(`Value of xStepDelta, the amount of distance crossed by each step: ${this.xStepDelta.toString()}`);
-    console.log(`Value of yStepDelta, the amount of distance crossed by each step: ${this.yStepDelta.toString()}`);
 
     // TODO: The .some() causes noticeable slowdowns when graphing 3d functions. Do something like create an object with all needed
     // coords, remove everything from the knownPoints in that new array, then iterate through the new array to avoid the .some()
     // being called thousands of times.
     while (currXVal.lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString))) {
-      if (is3D) {
+      if (graphType == "3D") {
         while (currYVal.lessThanOrEqualTo(this.math.bignumber(this.yWindowUpperString))) {
           if (knownPoints.some(point => point.xcoord === currXVal.toString() && point.ycoord === currYVal.toString())) {
             currYVal = currYVal.plus(this.yStepDelta);
             continue;
           }
 
-          let newPoint: Point = {id: undefined!, equation: "z = " + expression, xcoord: currXVal.toString(),
-            ycoord: currYVal.toString(), zcoord: this.math.evaluate(expression,
+          let newPoint: Point = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
+            ycoord: currYVal.toString(), zcoord: this.math.evaluate(equation,
             {x: this.math.bignumber(currXVal), y: this.math.bignumber(currYVal)}).toString()};
 
           newPoints.push(newPoint);
@@ -223,14 +188,15 @@ export class GrapherComponent implements OnInit {
 
         currYVal = this.math.bignumber(this.yWindowLowerString);
       }
-      else {
+
+      if (graphType == "2D" || graphType == "constant") {
         if (knownPoints.some(point => point.xcoord === currXVal.toString())) { // We check if a point already exists here and skip the calculation if it does.
           currXVal = currXVal.plus(this.xStepDelta);
           continue;
         }
 
-        let newPoint: Point = {id: undefined!, equation: "y = " + expression, xcoord: currXVal.toString(),
-          ycoord: this.math.evaluate(expression, {x: this.math.bignumber(currXVal)}).toString(), zcoord: null};
+        let newPoint: Point = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
+          ycoord: this.math.evaluate(equation, {x: this.math.bignumber(currXVal)}).toString(), zcoord: null};
       
         newPoints.push(newPoint);
       }
@@ -238,9 +204,12 @@ export class GrapherComponent implements OnInit {
       currXVal = currXVal.plus(this.xStepDelta);
     }
 
-    this.graphService.createPoints(newPoints).subscribe(() => { // Updates db with newly found points.
-      console.log("Newly calculated points: " + newPoints.length);
-    });
+    // We don't want to save constant functions to the DB. They are simple enough to calculate every time.
+    if (graphType !== "constant") {
+      this.graphService.createPoints(newPoints).subscribe(() => { // Updates db with newly found points.
+        console.log("Newly calculated points: " + newPoints.length);
+      });
+    }
     
     return newPoints;
   }
@@ -288,14 +257,21 @@ export class GrapherComponent implements OnInit {
       };
     }
 
-    let layout = {
-      title: `${this.pointsToGraph[0].equation}`
-    };
-
     let data: PlotlyJS.Data[] = [traces];
 
+    let layout: Partial<PlotlyJS.Layout> = {
+      title: `${this.pointsToGraph[0].equation}`,
+      xaxis: {range: [this.xWindowLowerString, this.xWindowUpperString]},
+      yaxis: {range: [this.yWindowLowerString, this.yWindowUpperString]}
+    };
+
+    let config: Partial<PlotlyJS.Config> = {
+      scrollZoom: true,
+      
+    }
+
     const myPlot: HTMLElement = document.getElementById('plotlyChart')!;
-    PlotlyJS.newPlot(myPlot, data, layout);
+    PlotlyJS.newPlot(myPlot, data, layout, config);
   }
 
   useTestValues(): void { // This is simply to avoid having to enter all parameters every time.
