@@ -12,7 +12,8 @@ namespace Grapher.Controllers
         [HttpGet("points/{equation}")]
         public List<Point> GetPoints(string equation)
         {
-            return grapherDB.Points.Where(point => point.Equation == equation).ToList();
+            // equations with / mess with the URL. %2F is the code for /, so fractions are passed to here with %2F.
+            return grapherDB.Points.Where(point => point.Equation == equation.Replace("%2F", "/")).ToList();
         }
 
         [HttpPost("addPoints")]

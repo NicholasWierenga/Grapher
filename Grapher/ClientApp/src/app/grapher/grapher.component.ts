@@ -10,12 +10,9 @@ import * as PlotlyJS from 'plotly.js-dist';
   styleUrls: ['./grapher.component.css']
 })
 
-// TODO: There is a 404 error when doing something like -1.1x + y and the program interprets -1.1x as -(110 * x * y).
-// I believe this has something to do with a malformed URL request, because 1.1x works fine and so does -1.0x.
-
 export class GrapherComponent implements OnInit {
   // TODO: Much of this should be passed directly to getGraphType later on.
-  equation: string = "";
+  equation: string = "-2.1x";
   xWindowLowerString: string = "";
   xWindowUpperString: string = "";
   yWindowLowerString: string = "";
@@ -40,6 +37,7 @@ export class GrapherComponent implements OnInit {
     if ((onlyVariables !== "x" && onlyVariables.length === 1) || !(onlyVariables.includes("x") && onlyVariables.includes("y"))
     || onlyVariables.length === 0) { // checks if expression has valid variables
       let expressionAndVariables: string[] = this.fixExpressionVariables(expression, variables);
+      console.log(expressionAndVariables);
       expression = expressionAndVariables[0];
       variables = expressionAndVariables[1];
     }
@@ -82,7 +80,7 @@ export class GrapherComponent implements OnInit {
 
   // This takes in our expression and returns what variables the user entered.
   getVariables(expression: string): string {
-    let variables: string = expression.replace(/[0-9+\-*.(){}\[\]<>^]/g, " ");
+    let variables: string = expression.replace(/[0-9+\-*.(){}\[\]\/<>^]/g, " ");
     
     let toRemove: string[] = ["sinh", "cosh", "sech", "csch", "tanh", "coth",
     "sin", "cos", "sec", "csc", "tan", "cot"];
@@ -267,10 +265,8 @@ export class GrapherComponent implements OnInit {
 
       // Because we sorted pointsToGraph by xcoord, we can split it apart into a number of arrays, each with the same xcoord
       while (splitPoints.length < parseInt(this.yStepsString) + 1) {
-        splitPoints.push(this.pointsToGraph.splice(0, skipAmount));
+        splitPoints.push(copyOfPoints.splice(0, skipAmount));
       }
-
-      this.pointsToGraph = copyOfPoints;
 
       // PlotlyJS likes to have 3d graph data that is split up into a number of arrays, each one signifying a line.
       // For here, since we sorted by xcoord above, splitPoints[0] would correspond to the line of x,y,z coords where x=xWindowLowerString.
@@ -339,3 +335,5 @@ export class GrapherComponent implements OnInit {
 // TODO: Implement some logic that replaces the need for the user to define how many steps to take. This would look like finding the
 // derivative of the inputted function and comparing the value of the derivative at the previous point and the current point. If
 // the difference between the too is too large, pick the point between the two and try again until the values are close enough. 
+
+// TODO: The equation that is listed above the graph for something like 1/3x displays as 0.3333333333333333333333x, which is obnoxious.

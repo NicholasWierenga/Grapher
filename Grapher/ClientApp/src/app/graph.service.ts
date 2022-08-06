@@ -19,6 +19,7 @@ export class GraphService {
   }
 
   getPoints(equation: string): Observable<Point[]> {
+    equation = equation.replace("/", "%2F"); // equations with / mess with the URL. %2F is the code for /.
     return this.http.get<Point[]>(this.urlRoot + `grapher/points/${equation}`);
   }
 
