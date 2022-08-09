@@ -6,11 +6,15 @@
     </span> -->
     <input type="text" placeholder="Enter expression here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
     <br>
-    <input type="text" placeholder="Lower bound for x-axis" [(ngModel)]="xWindowLowerString"  [ngModelOptions]="{standalone: true}"/>
-    <br>
+    <input type="text" placeholder="Lower bound for x-axis" [(ngModel)]="xWindowLowerString"  [ngModelOptions]="{standalone: true}"/> -
     <input type="text" placeholder="Upper bound for x-axis" [(ngModel)]="xWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
     <br>
     <input type="text" placeholder="Steps to take on x-axis" [(ngModel)]="xStepsString"  [ngModelOptions]="{standalone: true}"/>
+    <br>
+    <input type="text" placeholder="Lower bound for y-axis" [(ngModel)]="yWindowLowerString"  [ngModelOptions]="{standalone: true}"/> - 
+    <input type="text" placeholder="Upper bound for y-axis" [(ngModel)]="yWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
+    <br>
+    <input type="text" placeholder="Steps to take on y-axis" [(ngModel)]="yStepsString"  [ngModelOptions]="{standalone: true}"/>
     <br>
     <input type="submit">
   </form>
@@ -27,7 +31,8 @@
       <input type="text" placeholder="Enter expression here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
       <input type="submit" value="Test">
     </form>
+    <button (click)="purgeGraph()">Clear All</button>
   </div>
   
-  <div id="plotlyChart"></div>
+  <div id="plotlyChart" style="width:80%; height: 80%"></div>
 </div>
