@@ -5,7 +5,8 @@
     "outDir": "./dist/out-tsc",
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "noImplicitReturns": true,
+    // noImplicitReturns is true by default with this template, but it made the code look a bit weird so it was changed
+    "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": true,
     "sourceMap": true,
     "declaration": false,
@@ -18,7 +19,9 @@
     "lib": [
       "es2018",
       "dom"
-    ]
+    ],
+    // TODO: noImplicitAny should not be here. It was a temp fix for an issue with plotlyJS not working in TS.
+    "noImplicitAny": false
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
