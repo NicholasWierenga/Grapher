@@ -20,8 +20,7 @@
       "es2018",
       "dom"
     ],
-    // TODO: noImplicitAny should not be here. It was a temp fix for an issue with plotlyJS not working in TS.
-    "noImplicitAny": false
+    "noImplicitAny": true
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

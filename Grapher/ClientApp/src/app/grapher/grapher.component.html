@@ -1,5 +1,5 @@
 <div>
-  <form (ngSubmit)="getGraphType()">
+  <form (ngSubmit)="redoPreviousTraces()">
     <!-- <span *ngIf="badEquation" style="color:red"> This validation was removed and will be added elsewhere later.
       You must enter an equation.
       <br>
@@ -19,6 +19,7 @@
     <input type="submit">
   </form>
   <br>
+  
   <div>
     <p>
       Below is for trying out an expression quickly and uses pre-defined parameters.
@@ -32,6 +33,14 @@
       <input type="submit" value="Test">
     </form>
     <button (click)="purgeGraph()">Clear All</button>
+  </div>
+
+  <div id="chartStats" *ngIf="this.totalPointsFoundCount !== 0">
+    <p>
+      Saved points retrieved: {{this.savedPointsFoundCount}} <br>
+      Newly calculated points: {{this.newPointsFoundCount}} <br>
+      Total points in chart: {{this.totalPointsFoundCount}}
+    </p>
   </div>
   
   <div id="plotlyChart" style="width:80%; height: 80%"></div>
