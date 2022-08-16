@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { GraphService } from '../graph.service';
 import { Point } from '../point';
-import { create, all } from 'mathjs';
+import { create, all, BigNumber } from 'mathjs';
 import * as PlotlyJS from 'plotly.js-dist-min';
 
 @Component({
@@ -12,7 +12,6 @@ import * as PlotlyJS from 'plotly.js-dist-min';
 
 // TODO: Fix bug where very large numbers 111111111111111 are turned into 111111111111111x.
 export class GrapherComponent implements OnInit {
-  // TODO: Much of this should be passed directly to getGraphType later on.
   equation: string = "";
   xWindowLowerString: string = "";
   xWindowUpperString: string = "";
@@ -28,7 +27,15 @@ export class GrapherComponent implements OnInit {
   newPointsFoundCount: number = 0;
   savedPointsFoundCount: number = 0;
   totalPointsFoundCount: number = 0;
-  math = create(all, {number: 'BigNumber'});
+  config: math.ConfigOptions = {
+    epsilon: 1e-32,
+    matrix: 'Matrix',
+    number: 'BigNumber',
+    precision: 64,
+    predictable: false,
+    randomSeed: null
+  }
+  math = create(all, this.config)
   
   constructor(private graphService: GraphService) {
   }
@@ -108,7 +115,9 @@ export class GrapherComponent implements OnInit {
       variables = expressionAndVariables[1];
     }
     
-    this.xStepDelta = this.math.bignumber(this.xWindowUpperString).minus(this.xWindowLowerString).dividedBy(this.xStepsString);
+    this.xStepDelta = this.math.bignumber(this.math.bignumber(this.xWindowUpperString)
+    .minus(this.xWindowLowerString).dividedBy(this.xStepsString));
+    
     
     switch (onlyVariables.length) {
       case 0: {
@@ -135,7 +144,8 @@ export class GrapherComponent implements OnInit {
       case 2: {
         console.log("Two variable function found.");
         this.graphType = "3D";
-        this.yStepDelta = this.math.bignumber(this.yWindowUpperString).minus(this.yWindowLowerString).dividedBy(this.yStepsString);
+        this.yStepDelta = this.math.bignumber(this.yWindowUpperString)
+        .minus(this.yWindowLowerString).dividedBy(this.yStepsString);
         expression = `z = ${expression}`;
         break;
       }
@@ -225,18 +235,10 @@ export class GrapherComponent implements OnInit {
   getAllPoints(equation: string): void {
     this.graphService.getPoints(equation).subscribe(points => {
       this.pointsToGraph = this.filterPoints(points);
+
       console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
 
-      this.savedPointsFoundCount += this.pointsToGraph.length;
-      console.log("saved points count: " + this.savedPointsFoundCount);
-
-      // The below if statement will be removed later. It's currently a fix for the issue of .some() being called
-      // too many times and causing graphs to appear slower than if they were calculated from scratch.
-      if (this.pointsToGraph.length < (parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)) {
-        let calculatedPoints: Point[] = this.getNewPoints(this.pointsToGraph, equation);
-        
-        this.pointsToGraph = this.pointsToGraph.concat(calculatedPoints);
-      }
+      this.pointsToGraph = this.getNewPoints(this.pointsToGraph, equation);
 
       this.getGraph();
     });
@@ -244,83 +246,106 @@ export class GrapherComponent implements OnInit {
 
   // This filters out points depending on the user's amount of steps and windows for x and y.
   filterPoints(points: Point[]): Point[] {
+    let epsilon: BigNumber = this.math.bignumber("1e-32");
+
     if (this.graphType == "3D") {
-      return points.filter(point => 
-        this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.math.bignumber(this.xWindowLowerString)) &&  // filters for x window
-        this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString))
-        && (this.math.bignumber(point.xcoord).minus(this.math.bignumber(this.xWindowLowerString)))
-        .mod(this.math.bignumber(this.xStepDelta)).equals(this.math.bignumber("0")) && // filters for xcoords that are along the step values
-        this.math.bignumber(point.ycoord).greaterThanOrEqualTo(this.math.bignumber(this.yWindowLowerString)) && // same as above, but for y
-        this.math.bignumber(point.ycoord).lessThanOrEqualTo(this.math.bignumber(this.yWindowUpperString)) 
-        && (this.math.bignumber(point.ycoord).minus(this.math.bignumber(this.yWindowLowerString)))
-        .mod(this.math.bignumber(this.yStepDelta)).equals(this.math.bignumber("0"))
+      return points.filter(point =>
+        this.isGreaterThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowLowerString), epsilon)
+        && this.isLessThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowUpperString), epsilon)
+        && (this.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
+        .mod(this.xStepDelta), this.math.bignumber("0"), epsilon)
+        || this.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
+        .mod(this.xStepDelta), this.xStepDelta, epsilon))
+        && this.isGreaterThanOrEqualTo(this.math.bignumber(point.ycoord), this.math.bignumber(this.yWindowLowerString), epsilon)
+        && this.isLessThanOrEqualTo(this.math.bignumber(point.ycoord), this.math.bignumber(this.yWindowUpperString), epsilon)
+        && (this.isEqual(this.math.bignumber(point.ycoord).add(this.math.bignumber(this.yWindowLowerString))
+        .mod(this.yStepDelta), this.math.bignumber("0"), epsilon)
+        || this.isEqual(this.math.bignumber(point.ycoord).add(this.math.bignumber(this.yWindowLowerString))
+        .mod(this.yStepDelta), this.yStepDelta, epsilon))
       );
     }
     else { // filters for 2d
       return points.filter(point => 
-        this.math.bignumber(point.xcoord).greaterThanOrEqualTo(this.math.bignumber(this.xWindowLowerString)) && 
-        this.math.bignumber(point.xcoord).lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString))
-        && (this.math.bignumber(point.xcoord).minus(this.math.bignumber(this.xWindowLowerString)))
-        .mod(this.math.bignumber(this.xStepDelta)).equals(this.math.bignumber("0"))
+        this.isGreaterThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowLowerString), epsilon)
+        && this.isLessThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowUpperString), epsilon)
+        && (this.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
+        .mod(this.xStepDelta), this.math.bignumber("0"), epsilon)
+        || this.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
+        .mod(this.xStepDelta), this.xStepDelta, epsilon))
       );
     }
   }
 
-  // TODO: There's a payload too large error for many, many point calls. Break up requests into a while loop.
-  // This merges saved points with new points into pointsToGraph and calculates new points along x-step set then sends those to the DB to be saved.
+  // MathJS comparer functions don't work for numbers smaller than 2.22e^-16
+  isLessThanOrEqualTo(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
+    if (this.isEqual(leftNumber, rightNumber, epsilon)) {
+      return true;
+    }
+
+    return this.isLessThan(leftNumber, rightNumber);
+  }
+
+  isLessThan(leftNumber: BigNumber, rightNumber: BigNumber): boolean {
+    return this.math.isNegative(leftNumber.minus(rightNumber));
+  }
+
+  isGreaterThanOrEqualTo(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
+    if (this.isEqual(leftNumber, rightNumber, epsilon)) {
+      return true;
+    }
+
+    return this.isGreaterThan(leftNumber, rightNumber);
+  }
+
+  isGreaterThan(leftNumber: BigNumber, rightNumber: BigNumber): boolean {
+    return this.math.isPositive(leftNumber.minus(rightNumber));
+  }
+
+  isEqual(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
+    if (leftNumber.toString() === rightNumber.toString()) {
+      return true;
+    }
+
+    return this.isLessThan(this.math.abs(leftNumber.minus(rightNumber)), epsilon);
+  }
+
+  // This takes and has sorted the points passed to it then calculates unknown points. Calculated points are then saved in the DB.
   getNewPoints(knownPoints: Point[], equation: string): Point[] {
     let newPoints: Point[] = [];
-    let currXVal: math.BigNumber = this.math.bignumber(this.xWindowLowerString);
-    let currYVal: math.BigNumber = this.math.bignumber(this.yWindowLowerString);
+    let currXVal!: math.BigNumber;
+    let currYVal!: math.BigNumber;
+    let sortedPoints: Point[] = this.sortKnownPoints(knownPoints);
 
-    // TODO: The .some() causes noticeable slowdowns when graphing 3d functions. Do something like create an object with all needed
-    // coords, remove everything from the knownPoints in that new array, then iterate through the new array to avoid the .some()
-    // being called thousands of times.
-    // Idea for the above TODO: For this, try creating an array of length however many points there should be. Then, foreach the 
-    // known points and count how many deltas it is from the lower window to decide where it should be placed in the new blanked array.
-    // Next, foreach through the new array with some points in it from the DB, and for every element of that array that is
-    // undefined, set it to the point that it should belong to according to its index.
-    // This would have the added benefit of sorting our data and removing the need for .some()ing thousands upon thousands
-    // of times for an array that is already thousands large.
-    while (currXVal.lessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString))) {
-      if (this.graphType === "3D") {
-        while (currYVal.lessThanOrEqualTo(this.math.bignumber(this.yWindowUpperString))) {
-          if (knownPoints.some(point => point.xcoord === currXVal.toString() && point.ycoord === currYVal.toString())) {
-            currYVal = currYVal.plus(this.yStepDelta);
-            continue;
-          }
-
-          let newPoint: Point = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
-            ycoord: currYVal.toString(), zcoord: this.math.evaluate(equation,
-            {x: this.math.bignumber(currXVal), y: this.math.bignumber(currYVal)}).toString()};
-
-          newPoints.push(newPoint);
-      
-          currYVal = currYVal.plus(this.yStepDelta);
-        }
-
-        currYVal = this.math.bignumber(this.yWindowLowerString);
+    for (const [index, point] of sortedPoints.entries()) {
+      if (point !== undefined) {
+        continue;
       }
+
+      currXVal = this.math.bignumber(this.xWindowLowerString).add(this.xStepDelta.mul(index % (parseInt(this.yStepsString) + 1)));
 
       if (this.graphType === "2D" || this.graphType === "constant") {
-        // We check if a point already exists here and skip the calculation if it does.
-        if (knownPoints.some(point => point.xcoord === currXVal.toString())) {
-          currXVal = currXVal.plus(this.xStepDelta);
-          continue;
-        }
-
-        let newPoint: Point = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
+        sortedPoints[index] = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
           ycoord: this.math.evaluate(equation, {x: this.math.bignumber(currXVal)}).toString(), zcoord: null};
-      
-        newPoints.push(newPoint);
       }
-      
-      currXVal = currXVal.plus(this.xStepDelta);
+      // Program keeps calculating the final yStepsString number of points for 3D graphs.
+      else if (this.graphType === "3D") {
+        currYVal = this.math.bignumber(this.yWindowLowerString).add(this.yStepDelta.mul(this.math
+        .floor(index / (parseInt(this.yStepsString) + 1))));
+
+        sortedPoints[index] = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
+          ycoord: currYVal.toString(), zcoord: this.math.evaluate(equation,
+          {x: this.math.bignumber(currXVal), y: this.math.bignumber(currYVal)}).toString()};
+      }
+
+      newPoints.push(sortedPoints[index]);
     }
 
     this.newPointsFoundCount += newPoints.length;
-    console.log("points found count: " + newPoints.length);
 
+    // TODO: There's a payload too large error for many, many point calls. Break up requests into a while loop.
+    // Try doing something like wrapping this in a while loop with a condition that newPoints.length !== 0.
+    // Then call the .subscribe() and delete the packet of points(maybe through .splice() in the call, or after it)
+    // then continue the loop. Keep calling and deleting until nothing is left.
     // We don't want to save constant functions to the DB. They are simple enough to calculate every time.
     if (this.graphType !== "constant") {
       this.graphService.createPoints(newPoints).subscribe(() => {
@@ -328,10 +353,45 @@ export class GrapherComponent implements OnInit {
       });
     }
 
-    return newPoints;
+    return sortedPoints;
   }
 
-  // TODO: There's an issue when requesting too many points from the program. It's an ArrayBuffer error and probably caused by PlotlyJS.
+  // Sorts the points passed into a large unfilled array according to where the points should be based on steps.
+  // Occasionally, bugs might cause the same points to be saved. This function doesn't care about that and repeated
+  // points simply overwrite one another.
+  sortKnownPoints(knownPoints: Point[]): Point[] {
+    let sortedPoints: Point[] = [];
+
+    if (this.graphType === "2D" || this.graphType === "constant") {
+      sortedPoints.length = parseInt(this.xStepsString) + 1;
+    }
+    else if (this.graphType === "3D") {
+      sortedPoints.length = (parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1);
+    }
+
+    knownPoints.forEach((point: Point) => {
+      let index: number = parseInt(this.math.round(this.math.bignumber(point.xcoord).minus(
+      this.math.bignumber(this.xWindowLowerString)).dividedBy(this.math.bignumber(this.xStepDelta))).toString());
+
+      // The program handles 3D traces by calculating a line of points ascending the x-axis before taking a step up y-axis.
+      // This means that we can find which line on the y-axis the point is on by checking how many steps on the y it's done.
+      // In short: The if below finds what line the point is on, the let above finds position on the point's line it is on.
+      if (this.graphType === "3D") {
+        index += parseInt(this.math.round(this.math.bignumber(point.ycoord).minus(this.math.bignumber(this.yWindowLowerString))
+        .dividedBy(this.yStepDelta).mul(this.math.bignumber(parseInt(this.xStepsString) + 1))).toString());
+      }
+
+      sortedPoints[index] = point;
+    })
+
+    // Occasionally bugs can cause two of the same points to be present in the DB.
+    // This is to keep track of the found points even if a bug is causing too many points to be sent.
+    this.savedPointsFoundCount = sortedPoints.filter(point => point).length;
+
+    return sortedPoints;
+  }
+
+  // TODO: There's an issue when requesting too many points from the program. It's an ArrayBuffer error.
   getGraph(): void {
     let layout: Partial<PlotlyJS.Layout> = {
       xaxis: {range: [this.math.bignumber(this.xWindowLowerString).toString(), this.math.bignumber(this.xWindowUpperString).toString()]}
@@ -345,8 +405,6 @@ export class GrapherComponent implements OnInit {
       //responsive: true
     }
 
-    console.log(`Total points for ${this.pointsToGraph[0].equation}: ${this.pointsToGraph.length}.`);
-
     if (this.graphType === "3D") {
       let splitPoints: Point[][] = [];
       let skipAmount: number = parseInt(this.xStepsString) + 1;
@@ -359,6 +417,10 @@ export class GrapherComponent implements OnInit {
         splitPoints.push(copyOfPoints.splice(0, skipAmount));
       }
 
+      if (copyOfPoints.length !== 0) {
+        console.log("An error occurred. Array was not properly split in getGraph().");
+      }
+
       // PlotlyJS likes to have 3d graph data that is split up into a number of arrays, each one signifying a line.
       // For here, since we sorted by xcoord above, splitPoints[0] would correspond to the line of x,y,z coords where x=xWindowLowerString.
       // Without splitting the array, PlotlyJS assumes everything is contained on one great big line and starts connecting points and forming
@@ -369,7 +431,7 @@ export class GrapherComponent implements OnInit {
         z: splitPoints.map(pointArray => pointArray.map(point => point.zcoord)),
         name: this.pointsToGraph[0].equation,
         type: "surface",
-        hovertemplate: `(%{x},%{y},%{z})` // %{x} is what tells PlotlyJS to display the xcoord for what point cursor is on.
+        hovertemplate: `(%{x},%{y},%{z})` // %{x} is what tells PlotlyJS to display the xcoord for what point the cursor is on.
       };
     }
     else {
@@ -385,17 +447,97 @@ export class GrapherComponent implements OnInit {
     this.graphData.push(trace);
 
     this.totalPointsFoundCount = this.newPointsFoundCount + this.savedPointsFoundCount;
-    console.log("New: " + this.newPointsFoundCount);
-    console.log("Saved: " + this.savedPointsFoundCount);
-    console.log("Total: " + this.totalPointsFoundCount);
+
+    
 
     if (this.graphData.length === 1) {
-      layout.showlegend = true; // PlotlyJS does not support legend showing legend for surface plots.
+      layout.showlegend = true; // PlotlyJS does not support legend showing legend for surface plots, so this only matters for 2D.
       PlotlyJS.newPlot("plotlyChart", [trace], layout, config);
     }
     else {
       PlotlyJS.addTraces("plotlyChart", [trace]);
+      // TODO: For 3D, get the name and keep tacking on each trace to the title string, then restyle.
+      // This should then display the equation above the graph. This is to get around the fact that surface doesn't allow legends.
       PlotlyJS.relayout("plotlyChart", layout);
+    }
+
+    this.checkForProblems(trace);
+  }
+
+  // After a trace is added, this is ran to check data that would indicate where a problem is coming from.
+  // When an error is found, the console prints out what was found and associated variables.
+  checkForProblems(trace: Partial<PlotlyJS.PlotData>): void {
+    // Checks for if the amount of points is correct.
+    if (this.totalPointsFoundCount !== this.pointsToGraph.length) {
+      console.log(`\nThere was an error. this.totalPointsFoundCount isn't the same 
+      as the amount of points in this.pointsToGraph.`);
+      console.log(`this.totalPointsFoundCount is: ${this.totalPointsFoundCount}. 
+      this.pointsToGraph.length is ${this.pointsToGraph.length}.`);
+    }
+
+    if (this.graphType === "3D" && this.totalPointsFoundCount 
+    !== (parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)) {
+      console.log(`\nThere was an error. this.totalPointsFoundCount isn't the same as the amount of points there should be.`);
+      console.log(`Correct amount should be: ${(parseInt(this.xStepsString) + 1) *
+      (parseInt(this.yStepsString) + 1)}. this.totalPointsFoundCount is: ${this.totalPointsFoundCount}.`);
+    }
+
+    if (this.graphType !== "3D" && this.totalPointsFoundCount !== parseInt(this.xStepsString) + 1) {
+      console.log("\nThere was an error. this.totalPointsFoundCount isn't the same as the amount of points there should be.");
+      console.log(`Correct amount is: ${parseInt(this.xStepsString) + 1}. 
+      this.totalPointsFoundCount is: ${this.totalPointsFoundCount}.`);
+    }
+
+    if (trace.x!.length !== parseInt(this.yStepsString) + 1 && this.graphType !== "3D") {
+      console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
+      console.log(`Correct number should be ${parseInt(this.xStepsString) + 1}. 
+      The number found is ${trace.x!.length}.`);
+    }
+
+    if (trace.x!.length !== this.pointsToGraph.length && this.graphType !== "3D") {
+      console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
+      console.log(`this.pointsToGraph has ${this.pointsToGraph.length}. 
+      The number of points in trace is ${trace.x!.length}.`);
+    }
+
+    // Checks for issues in with how the data is sorted.
+    // trace.x doesn't return a nice array, so a lot of odd stuff needs to be used to work with it.
+    if ([...trace.x!][0]?.toString().split(",")[0] !== this.xWindowLowerString) {
+      console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
+      console.log([...trace.x!][0]?.toString().split(",")[0]);
+      console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[0]}. 
+      Lower x-window is: ${this.xWindowLowerString}.`);
+    }
+
+    if ([...trace.x!][0]?.toString().split(",")[([...trace.x!][0]?.toString().split(",").length! - 1)]
+     !== this.xWindowUpperString) {
+      console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
+      console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[([...trace.x!][0]?.toString()
+      .split(",").length! - 1)]}. Upper x-window is: ${this.xWindowUpperString}.`);
+    }
+
+    if ([...trace.y!][0]?.toString().split(",")[0] !== this.yWindowLowerString && this.graphType === "3D") {
+      console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
+      console.log(`Trace-number found: ${[...trace.y!][0]?.toString().split(",")[0]}. 
+      Lower y-window is: ${this.yWindowLowerString}.`);
+    }
+
+    if ([...trace.y!][parseInt(this.xStepsString)]?.toString().split(",")[0]
+      !== this.yWindowUpperString && this.graphType === "3D") {
+      console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
+      console.log(`Trace-number found: ${[...trace.y!][parseInt(this.xStepsString)]?.toString().split(",")[0]}. 
+      Upper y-window is: ${this.yWindowUpperString}.`);
+    }
+
+    // Checks for lines in 3D plots
+    if (trace.x!.length !== parseInt(this.yStepsString) + 1 && this.graphType === "3D") {
+      console.log("\nThere was an error. The amount of lines for the 3D plot isn't the correct amount.");
+      console.log(`Correct number should be ${parseInt(this.yStepsString) + 1}. The number found is ${trace.x!.length}.`);
+    }
+
+    if (trace.y!.length !== parseInt(this.xStepsString) + 1 && this.graphType === "3D") {
+      console.log("\nThere was an error. The amount of points per line along y-axis isn't the correct amount.");
+      console.log(`Correct number should be ${parseInt(this.xStepsString) + 1}. The number found is ${trace.y!.length}.`);
     }
   }
 
@@ -412,6 +554,7 @@ export class GrapherComponent implements OnInit {
 
   purgeGraph(): void {
     this.graphData = [];
+    this.totalPointsFoundCount = 0;
     PlotlyJS.purge("plotlyChart");
   }
 
@@ -436,7 +579,7 @@ export class GrapherComponent implements OnInit {
 // into the program that identifies that xsin(x) means x*sin(x). This would probably look something like identifying that x is next
 // to a non-variable letter, which indicates it's meant to act as a multiple of some function. This could be done by instead of
 // searching through and spacing-out found trig functions, we give some other value like # and so we check if # is adjacent
-// x. If so, we simply put a * between them and then the program won't error out and cause the user to have to put the * themself.
+// x. If so, we simply put a * between them and then the program won't error out and cause the user to have to put the * themselves.
 
 // TODO: Implement some logic that replaces the need for the user to define how many steps to take. This would look like finding the
 // derivative of the inputted function and comparing the value of the derivative at the previous point and the current point. If
@@ -449,3 +592,10 @@ export class GrapherComponent implements OnInit {
 // further simplifying down equations sent to the DB and cutting down the calculations, which would overall speed up the program
 // for someone using equations like tan(x)*cos(x). It would allow them to pull from the DB using sin(x), which is more likely to be
 // present than something like tan(x)*cos(x).
+
+// TODO: Error: <path> attribute transform: Expected number, "translate(5.49139131172038…". is an error that comes when zooming
+// extremely far into the graph. This only prints errors on the console, but the program doesn't stop running and nothing seems
+// to break as a result. Read up on it to decide if this is something that should be worried about.
+
+// TODO: If user does not have the Point table on the DB, then graphs cannot be shown due to and error. The program is meant 
+// to work with a DB, but it would be nice if the DB breaks that the program still runs.
