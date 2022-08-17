@@ -12,7 +12,7 @@ import * as PlotlyJS from 'plotly.js-dist-min';
 
 // TODO: Fix bug where very large numbers 111111111111111 are turned into 111111111111111x.
 export class GrapherComponent implements OnInit {
-  equation: string = "";
+  equation: string = "x*y";
   xWindowLowerString: string = "";
   xWindowUpperString: string = "";
   yWindowLowerString: string = "";
@@ -40,8 +40,6 @@ export class GrapherComponent implements OnInit {
   constructor(private graphService: GraphService) {
   }
 
-  // TODO: Changing windows for 3D graphs can cause visual errors. This is likely from unsorted data.
-  // Currently, the logic for recalculating for 3D graphs is commented out.
   // Recalculates previously used equations at the new window settings and steps.
   redoPreviousTraces(): void {
     this.newPointsFoundCount = 0;
@@ -56,17 +54,12 @@ export class GrapherComponent implements OnInit {
     if (this.graphData.length >= 1) {
       this.graphData.forEach(data => {
         this.equation = data.name!;
-        // TODO: Sort the below x's and y's. Currently we're just hoping that the lowest and highest.
-        // This is probably best to do elsewhere, like in getNewPoints().
-        // are the beginning and end of the array.
         let oldLowerXString: string = data.x![0]!.toString();
         let oldUpperXString: string = data.x![data.x!.length - 1]!.toString();
         let oldLowerYString: string = data.y![0]!.toString();
         let oldUpperYString: string = data.y![data.y!.length - 1]!.toString();
-  
-        // TODO: An issue occurs for 2D graphs. putting in 1, x, then x^2 and then switching x to be from -15, 15,
-        // the graph won't update for y = 1. Clicking it again will fix everything.
-        // We delete and redo any traces found to have different window settings.
+
+        // We redo any traces found to have different window settings.
         if ((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString)
           && data.name!.includes("y")) {
           this.equation = data.name!
@@ -76,17 +69,16 @@ export class GrapherComponent implements OnInit {
   
           amountOfRedos++;
         }
-        // This is not done due to sorting points problems.
-        //else if ((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString
-        //  || oldLowerYString !== this.yWindowLowerString || oldUpperYString !== this.yWindowUpperString)
-        //  && data.name!.includes("z")) {
-        //  this.equation = data.name!
-        //  console.log("Old 3D trace found with bad windows. It is: " + data.name);
-        //
-        //  this.getGraphType();
-        //
-        //  amountOfRedos++;
-        //}
+        else if ((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString
+          || oldLowerYString !== this.yWindowLowerString || oldUpperYString !== this.yWindowUpperString)
+          && data.name!.includes("z")) {
+          this.equation = data.name!
+          console.log("Old 3D trace found with bad windows. It is: " + data.name);
+        
+          this.getGraphType();
+        
+          amountOfRedos++;
+        }
       })
     }
 
@@ -276,7 +268,8 @@ export class GrapherComponent implements OnInit {
     }
   }
 
-  // MathJS comparer functions don't work for numbers smaller than 2.22e^-16
+  // MathJS comparer functions don't work for numbers smaller than 2.22e^-16.
+  // TODO: Move these into their own service. They don't belong in this component.
   isLessThanOrEqualTo(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
     if (this.isEqual(leftNumber, rightNumber, epsilon)) {
       return true;
@@ -468,76 +461,107 @@ export class GrapherComponent implements OnInit {
   // When an error is found, the console prints out what was found and associated variables.
   checkForProblems(trace: Partial<PlotlyJS.PlotData>): void {
     // Checks for if the amount of points is correct.
-    if (this.totalPointsFoundCount !== this.pointsToGraph.length) {
-      console.log(`\nThere was an error. this.totalPointsFoundCount isn't the same 
-      as the amount of points in this.pointsToGraph.`);
-      console.log(`this.totalPointsFoundCount is: ${this.totalPointsFoundCount}. 
-      this.pointsToGraph.length is ${this.pointsToGraph.length}.`);
+    if (this.graphType !== "3D") {
+      if (trace.x!.length !== parseInt(this.xStepsString) + 1) {
+        console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
+        console.log(`Correct number should be ${parseInt(this.xStepsString) + 1}. 
+        The number found is ${trace.x!.length}.`);
+      }
+
+      if (trace.x!.length !== this.pointsToGraph.length) {
+        console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
+        console.log(`this.pointsToGraph has ${this.pointsToGraph.length}. 
+        The number of points in trace is ${trace.x!.length}.`);
+      }
     }
 
-    if (this.graphType === "3D" && this.totalPointsFoundCount 
-    !== (parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)) {
-      console.log(`\nThere was an error. this.totalPointsFoundCount isn't the same as the amount of points there should be.`);
-      console.log(`Correct amount should be: ${(parseInt(this.xStepsString) + 1) *
-      (parseInt(this.yStepsString) + 1)}. this.totalPointsFoundCount is: ${this.totalPointsFoundCount}.`);
-    }
+    if (this.graphType === "3D") {
+      let numberOfLines: number = trace.x!.length;
+      let numberOfPoints: number[] = [];
 
-    if (this.graphType !== "3D" && this.totalPointsFoundCount !== parseInt(this.xStepsString) + 1) {
-      console.log("\nThere was an error. this.totalPointsFoundCount isn't the same as the amount of points there should be.");
-      console.log(`Correct amount is: ${parseInt(this.xStepsString) + 1}. 
-      this.totalPointsFoundCount is: ${this.totalPointsFoundCount}.`);
-    }
+      for (var i = 0; i < trace.x!.length; i++) {
+        numberOfPoints.push(trace.y![i]!.toString().split(",").length);
+      }
 
-    if (trace.x!.length !== parseInt(this.yStepsString) + 1 && this.graphType !== "3D") {
-      console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
-      console.log(`Correct number should be ${parseInt(this.xStepsString) + 1}. 
-      The number found is ${trace.x!.length}.`);
-    }
+      if (this.pointsToGraph.length !== (parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)) {
+        console.log(`\nThere was an error. this.totalPointsFoundCount isn't the same as the amount of points there should be.`);
+        console.log(`Correct amount should be: ${(parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)}. 
+        this.pointsToGraph is: ${this.pointsToGraph.length}.`);
+      }
 
-    if (trace.x!.length !== this.pointsToGraph.length && this.graphType !== "3D") {
-      console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
-      console.log(`this.pointsToGraph has ${this.pointsToGraph.length}. 
-      The number of points in trace is ${trace.x!.length}.`);
+      if (numberOfLines !== (parseInt(this.xStepsString) + 1)) {
+        console.log("\nThere was an error. There is an incorrect number of lines that should be in this graph");
+        console.log(`The number of lines are ${numberOfLines}. The amount that there should be is: ${parseInt(this.xStepsString) + 1}.`);
+      }
+
+      if (numberOfPoints.findIndex(pointCount => pointCount !== (parseInt(this.yStepsString) + 1)) !== -1) {
+        console.log("\nThere was an error. There is an incorrect number of points on each line.");
+        console.log(`The number of points per line is found below. The amount that there should be is: ${parseInt(this.yStepsString) + 1}.`);
+        console.log(numberOfPoints);
+      }
     }
 
     // Checks for issues in with how the data is sorted.
-    // trace.x doesn't return a nice array, so a lot of odd stuff needs to be used to work with it.
-    if ([...trace.x!][0]?.toString().split(",")[0] !== this.xWindowLowerString) {
-      console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
-      console.log([...trace.x!][0]?.toString().split(",")[0]);
-      console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[0]}. 
-      Lower x-window is: ${this.xWindowLowerString}.`);
+    if (this.graphType !== "3D") {
+      if ([...trace.x!][0]?.toString().split(",")[0] !== this.xWindowLowerString) {
+        console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
+        console.log([...trace.x!][0]?.toString().split(",")[0]);
+        console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[0]}. 
+        Lower x-window is: ${this.xWindowLowerString}.`);
+      }
+
+      if (this.graphType !== "3D" && trace.x![parseInt(this.xStepsString)] !== this.xWindowUpperString) {
+        console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
+        console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[([...trace.x!][0]?.toString()
+        .split(",").length! - 1)]}. Upper x-window is: ${this.xWindowUpperString}.`);
+      }
     }
 
-    if ([...trace.x!][0]?.toString().split(",")[([...trace.x!][0]?.toString().split(",").length! - 1)]
-     !== this.xWindowUpperString) {
-      console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
-      console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[([...trace.x!][0]?.toString()
-      .split(",").length! - 1)]}. Upper x-window is: ${this.xWindowUpperString}.`);
-    }
+    if (this.graphType === "3D") {
+      let beginningXValues: string[] = [];
+      let endingXValues: string[] = [];
+      let beginningYValues: string[] = [];
+      let endingYValues: string[] = [];
 
-    if ([...trace.y!][0]?.toString().split(",")[0] !== this.yWindowLowerString && this.graphType === "3D") {
-      console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
-      console.log(`Trace-number found: ${[...trace.y!][0]?.toString().split(",")[0]}. 
-      Lower y-window is: ${this.yWindowLowerString}.`);
-    }
+      for (var i = 0; i < trace.x!.length; i++) {
+        beginningXValues.push(trace.x![i]!.toString().split(",")[0]);
+      }
 
-    if ([...trace.y!][parseInt(this.xStepsString)]?.toString().split(",")[0]
-      !== this.yWindowUpperString && this.graphType === "3D") {
-      console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
-      console.log(`Trace-number found: ${[...trace.y!][parseInt(this.xStepsString)]?.toString().split(",")[0]}. 
-      Upper y-window is: ${this.yWindowUpperString}.`);
-    }
+      for (var i = 0; i < trace.x!.length; i++) {
+        endingXValues.push(trace.x![i]!.toString().split(",")[parseInt(this.xStepsString)]);
+      }
 
-    // Checks for lines in 3D plots
-    if (trace.x!.length !== parseInt(this.yStepsString) + 1 && this.graphType === "3D") {
-      console.log("\nThere was an error. The amount of lines for the 3D plot isn't the correct amount.");
-      console.log(`Correct number should be ${parseInt(this.yStepsString) + 1}. The number found is ${trace.x!.length}.`);
-    }
+      for (var i = 0; i < trace.y!.length; i++) {
+        beginningYValues.push(trace.y![0]!.toString().split(",")[i]);
+      }
 
-    if (trace.y!.length !== parseInt(this.xStepsString) + 1 && this.graphType === "3D") {
-      console.log("\nThere was an error. The amount of points per line along y-axis isn't the correct amount.");
-      console.log(`Correct number should be ${parseInt(this.xStepsString) + 1}. The number found is ${trace.y!.length}.`);
+      for (var i = 0; i < trace.y!.length; i++) {
+        endingYValues.push(trace.y![parseInt(this.yStepsString)]!.toString().split(",")[i]);
+      }
+
+      if (beginningXValues.findIndex(beginXVal => beginXVal !== this.xWindowLowerString) !== -1) {
+        console.log("\nThere was an error. Beginning x-values were not sorted.");
+        console.log(`Beginning x-values are:`);
+        console.log(beginningXValues);
+      }
+
+      if (endingXValues.findIndex(endXVal => endXVal !== this.xWindowUpperString) !== -1) {
+        console.log("\nThere was an error. Ending x-values were not sorted.");
+        console.log(`Ending x-values are:`);
+        console.log(endingXValues);
+      }
+
+      if (beginningYValues.findIndex(beginYVal => beginYVal !== this.yWindowLowerString) !== -1) {
+        console.log("\nThere was an error. Beginning y-values were not sorted.");
+        console.log(`Beginning y-values are:`);
+        console.log(beginningYValues);
+      }
+
+      if (endingYValues.findIndex(endYVal => endYVal !== this.yWindowUpperString) !== -1) {
+        console.log("\nThere was an error. Ending y-values were not sorted.");
+        console.log(`Ending y-values are:`);
+        console.log(endingYValues);
+      }
     }
   }
 
