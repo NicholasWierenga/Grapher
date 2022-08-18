@@ -129,5 +129,8 @@
       }
     }
   },
-  "defaultProject": "Grapher"
+  "defaultProject": "Grapher",
+  "cli": {
+    "analytics": "1f87c444-407d-4775-acfe-41ac10c4d5be"
+  }
 }

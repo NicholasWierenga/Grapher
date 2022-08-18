@@ -1,8 +1,10 @@
 import { Component, OnInit } from '@angular/core';
+import { TestService } from '../test.service';
 import { GraphService } from '../graph.service';
 import { Point } from '../point';
 import { create, all, BigNumber } from 'mathjs';
 import * as PlotlyJS from 'plotly.js-dist-min';
+import { MathExtrasService } from '../math-extras.service';
 
 @Component({
   selector: 'app-grapher',
@@ -12,7 +14,7 @@ import * as PlotlyJS from 'plotly.js-dist-min';
 
 // TODO: Fix bug where very large numbers 111111111111111 are turned into 111111111111111x.
 export class GrapherComponent implements OnInit {
-  equation: string = "x*y";
+  equation: string = "";
   xWindowLowerString: string = "";
   xWindowUpperString: string = "";
   yWindowLowerString: string = "";
@@ -34,11 +36,11 @@ export class GrapherComponent implements OnInit {
     precision: 64,
     predictable: false,
     randomSeed: null
-  }
-  math = create(all, this.config)
+  };
+  math: math.MathJsStatic = create(all, this.config);
   
-  constructor(private graphService: GraphService) {
-  }
+  constructor(private graphService: GraphService, private mathExtras: MathExtrasService,
+    private testService: TestService) { }
 
   // Recalculates previously used equations at the new window settings and steps.
   redoPreviousTraces(): void {
@@ -242,64 +244,30 @@ export class GrapherComponent implements OnInit {
 
     if (this.graphType == "3D") {
       return points.filter(point =>
-        this.isGreaterThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowLowerString), epsilon)
-        && this.isLessThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowUpperString), epsilon)
-        && (this.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
+        this.mathExtras.isGreaterThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowLowerString), epsilon)
+        && this.mathExtras.isLessThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowUpperString), epsilon)
+        && (this.mathExtras.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
         .mod(this.xStepDelta), this.math.bignumber("0"), epsilon)
-        || this.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
+        || this.mathExtras.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
         .mod(this.xStepDelta), this.xStepDelta, epsilon))
-        && this.isGreaterThanOrEqualTo(this.math.bignumber(point.ycoord), this.math.bignumber(this.yWindowLowerString), epsilon)
-        && this.isLessThanOrEqualTo(this.math.bignumber(point.ycoord), this.math.bignumber(this.yWindowUpperString), epsilon)
-        && (this.isEqual(this.math.bignumber(point.ycoord).add(this.math.bignumber(this.yWindowLowerString))
+        && this.mathExtras.isGreaterThanOrEqualTo(this.math.bignumber(point.ycoord), this.math.bignumber(this.yWindowLowerString), epsilon)
+        && this.mathExtras.isLessThanOrEqualTo(this.math.bignumber(point.ycoord), this.math.bignumber(this.yWindowUpperString), epsilon)
+        && (this.mathExtras.isEqual(this.math.bignumber(point.ycoord).add(this.math.bignumber(this.yWindowLowerString))
         .mod(this.yStepDelta), this.math.bignumber("0"), epsilon)
-        || this.isEqual(this.math.bignumber(point.ycoord).add(this.math.bignumber(this.yWindowLowerString))
+        || this.mathExtras.isEqual(this.math.bignumber(point.ycoord).add(this.math.bignumber(this.yWindowLowerString))
         .mod(this.yStepDelta), this.yStepDelta, epsilon))
       );
     }
     else { // filters for 2d
       return points.filter(point => 
-        this.isGreaterThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowLowerString), epsilon)
-        && this.isLessThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowUpperString), epsilon)
-        && (this.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
+        this.mathExtras.isGreaterThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowLowerString), epsilon)
+        && this.mathExtras.isLessThanOrEqualTo(this.math.bignumber(point.xcoord), this.math.bignumber(this.xWindowUpperString), epsilon)
+        && (this.mathExtras.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
         .mod(this.xStepDelta), this.math.bignumber("0"), epsilon)
-        || this.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
+        || this.mathExtras.isEqual(this.math.bignumber(point.xcoord).add(this.math.bignumber(this.xWindowLowerString))
         .mod(this.xStepDelta), this.xStepDelta, epsilon))
       );
     }
-  }
-
-  // MathJS comparer functions don't work for numbers smaller than 2.22e^-16.
-  // TODO: Move these into their own service. They don't belong in this component.
-  isLessThanOrEqualTo(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
-    if (this.isEqual(leftNumber, rightNumber, epsilon)) {
-      return true;
-    }
-
-    return this.isLessThan(leftNumber, rightNumber);
-  }
-
-  isLessThan(leftNumber: BigNumber, rightNumber: BigNumber): boolean {
-    return this.math.isNegative(leftNumber.minus(rightNumber));
-  }
-
-  isGreaterThanOrEqualTo(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
-    if (this.isEqual(leftNumber, rightNumber, epsilon)) {
-      return true;
-    }
-
-    return this.isGreaterThan(leftNumber, rightNumber);
-  }
-
-  isGreaterThan(leftNumber: BigNumber, rightNumber: BigNumber): boolean {
-    return this.math.isPositive(leftNumber.minus(rightNumber));
-  }
-
-  isEqual(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
-    if (leftNumber.toString() === rightNumber.toString()) {
-      return true;
-    }
-
-    return this.isLessThan(this.math.abs(leftNumber.minus(rightNumber)), epsilon);
   }
 
   // This takes and has sorted the points passed to it then calculates unknown points. Calculated points are then saved in the DB.
@@ -441,8 +409,6 @@ export class GrapherComponent implements OnInit {
 
     this.totalPointsFoundCount = this.newPointsFoundCount + this.savedPointsFoundCount;
 
-    
-
     if (this.graphData.length === 1) {
       layout.showlegend = true; // PlotlyJS does not support legend showing legend for surface plots, so this only matters for 2D.
       PlotlyJS.newPlot("plotlyChart", [trace], layout, config);
@@ -454,115 +420,31 @@ export class GrapherComponent implements OnInit {
       PlotlyJS.relayout("plotlyChart", layout);
     }
 
-    this.checkForProblems(trace);
+    this.passDataToTestService();
+
+    this.testService.checkForProblems();
   }
 
-  // After a trace is added, this is ran to check data that would indicate where a problem is coming from.
-  // When an error is found, the console prints out what was found and associated variables.
-  checkForProblems(trace: Partial<PlotlyJS.PlotData>): void {
-    // Checks for if the amount of points is correct.
-    if (this.graphType !== "3D") {
-      if (trace.x!.length !== parseInt(this.xStepsString) + 1) {
-        console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
-        console.log(`Correct number should be ${parseInt(this.xStepsString) + 1}. 
-        The number found is ${trace.x!.length}.`);
-      }
-
-      if (trace.x!.length !== this.pointsToGraph.length) {
-        console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
-        console.log(`this.pointsToGraph has ${this.pointsToGraph.length}. 
-        The number of points in trace is ${trace.x!.length}.`);
-      }
-    }
-
-    if (this.graphType === "3D") {
-      let numberOfLines: number = trace.x!.length;
-      let numberOfPoints: number[] = [];
-
-      for (var i = 0; i < trace.x!.length; i++) {
-        numberOfPoints.push(trace.y![i]!.toString().split(",").length);
-      }
-
-      if (this.pointsToGraph.length !== (parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)) {
-        console.log(`\nThere was an error. this.totalPointsFoundCount isn't the same as the amount of points there should be.`);
-        console.log(`Correct amount should be: ${(parseInt(this.xStepsString) + 1) * (parseInt(this.yStepsString) + 1)}. 
-        this.pointsToGraph is: ${this.pointsToGraph.length}.`);
-      }
-
-      if (numberOfLines !== (parseInt(this.xStepsString) + 1)) {
-        console.log("\nThere was an error. There is an incorrect number of lines that should be in this graph");
-        console.log(`The number of lines are ${numberOfLines}. The amount that there should be is: ${parseInt(this.xStepsString) + 1}.`);
-      }
-
-      if (numberOfPoints.findIndex(pointCount => pointCount !== (parseInt(this.yStepsString) + 1)) !== -1) {
-        console.log("\nThere was an error. There is an incorrect number of points on each line.");
-        console.log(`The number of points per line is found below. The amount that there should be is: ${parseInt(this.yStepsString) + 1}.`);
-        console.log(numberOfPoints);
-      }
-    }
-
-    // Checks for issues in with how the data is sorted.
-    if (this.graphType !== "3D") {
-      if ([...trace.x!][0]?.toString().split(",")[0] !== this.xWindowLowerString) {
-        console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
-        console.log([...trace.x!][0]?.toString().split(",")[0]);
-        console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[0]}. 
-        Lower x-window is: ${this.xWindowLowerString}.`);
-      }
-
-      if (this.graphType !== "3D" && trace.x![parseInt(this.xStepsString)] !== this.xWindowUpperString) {
-        console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
-        console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[([...trace.x!][0]?.toString()
-        .split(",").length! - 1)]}. Upper x-window is: ${this.xWindowUpperString}.`);
-      }
-    }
-
-    if (this.graphType === "3D") {
-      let beginningXValues: string[] = [];
-      let endingXValues: string[] = [];
-      let beginningYValues: string[] = [];
-      let endingYValues: string[] = [];
-
-      for (var i = 0; i < trace.x!.length; i++) {
-        beginningXValues.push(trace.x![i]!.toString().split(",")[0]);
-      }
-
-      for (var i = 0; i < trace.x!.length; i++) {
-        endingXValues.push(trace.x![i]!.toString().split(",")[parseInt(this.xStepsString)]);
-      }
-
-      for (var i = 0; i < trace.y!.length; i++) {
-        beginningYValues.push(trace.y![0]!.toString().split(",")[i]);
-      }
-
-      for (var i = 0; i < trace.y!.length; i++) {
-        endingYValues.push(trace.y![parseInt(this.yStepsString)]!.toString().split(",")[i]);
-      }
-
-      if (beginningXValues.findIndex(beginXVal => beginXVal !== this.xWindowLowerString) !== -1) {
-        console.log("\nThere was an error. Beginning x-values were not sorted.");
-        console.log(`Beginning x-values are:`);
-        console.log(beginningXValues);
-      }
-
-      if (endingXValues.findIndex(endXVal => endXVal !== this.xWindowUpperString) !== -1) {
-        console.log("\nThere was an error. Ending x-values were not sorted.");
-        console.log(`Ending x-values are:`);
-        console.log(endingXValues);
-      }
-
-      if (beginningYValues.findIndex(beginYVal => beginYVal !== this.yWindowLowerString) !== -1) {
-        console.log("\nThere was an error. Beginning y-values were not sorted.");
-        console.log(`Beginning y-values are:`);
-        console.log(beginningYValues);
-      }
-
-      if (endingYValues.findIndex(endYVal => endYVal !== this.yWindowUpperString) !== -1) {
-        console.log("\nThere was an error. Ending y-values were not sorted.");
-        console.log(`Ending y-values are:`);
-        console.log(endingYValues);
-      }
-    }
+  // This is meant to keep test.service up to date with current data.
+  // I like to keep passing data as the program runs to check inputs for any errors.
+  passDataToTestService(): void {
+    this.testService.equation = this.pointsToGraph[0].equation;
+    this.testService.xWindowLowerString = this.xWindowLowerString;
+    this.testService.xWindowUpperString = this.xWindowUpperString;
+    this.testService.yWindowLowerString = this.yWindowLowerString;
+    this.testService.yWindowUpperString = this.yWindowUpperString;
+    this.testService.xStepsString = this.xStepsString;
+    this.testService.yStepsString = this.yStepsString;
+    this.testService.xStepDelta = this.xStepDelta;
+    this.testService.yStepDelta = this.yStepDelta;
+    this.testService.pointsToGraph = this.pointsToGraph;
+    this.testService.graphData = this.graphData;
+    this.testService.graphType = this.graphType;
+    this.testService.newPointsFoundCount = this.newPointsFoundCount;
+    this.testService.savedPointsFoundCount = this.savedPointsFoundCount;
+    this.testService.totalPointsFoundCount = this.totalPointsFoundCount;
+    this.testService.config = this.config;
+    this.testService.math = this.math;
   }
 
   useTestValues(): void { // This is simply to avoid having to enter all parameters every time.
@@ -583,6 +465,8 @@ export class GrapherComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // When the program loads, this tests the functions used to fix MathJS functions.
+    this.testService.testMath();
   }
 }
 
