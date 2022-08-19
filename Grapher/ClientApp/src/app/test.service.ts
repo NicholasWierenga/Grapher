@@ -94,11 +94,10 @@ export class TestService {
         Lower x-window is: ${this.xWindowLowerString}.`);
       }
 
-      if (this.graphType !== "3D" && trace.x![parseInt(this.xStepsString)] 
-      !== this.xWindowUpperString) {
+      if (trace.x![parseInt(this.xStepsString)] !== this.xWindowUpperString) {
         console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
-        console.log(`Trace-number found: ${[...trace.x!][0]?.toString().split(",")[([...trace.x!][0]?.toString()
-        .split(",").length! - 1)]}. Upper x-window is: ${this.xWindowUpperString}.`);
+        console.log(`Trace-number found: ${trace.x![parseInt(this.xStepsString)]}. 
+        Upper x-window is: ${this.xWindowUpperString}.`);
       }
     }
 
@@ -126,25 +125,25 @@ export class TestService {
 
       if (beginningXValues.findIndex(beginXVal => beginXVal !== this.xWindowLowerString) !== -1) {
         console.log("\nThere was an error. Beginning x-values were not sorted.");
-        console.log(`Beginning x-values are:`);
+        console.log(`Beginning x-values are below.`);
         console.log(beginningXValues);
       }
 
       if (endingXValues.findIndex(endXVal => endXVal !== this.xWindowUpperString) !== -1) {
         console.log("\nThere was an error. Ending x-values were not sorted.");
-        console.log(`Ending x-values are:`);
+        console.log(`Ending x-values are below.`);
         console.log(endingXValues);
       }
 
       if (beginningYValues.findIndex(beginYVal => beginYVal !== this.yWindowLowerString) !== -1) {
         console.log("\nThere was an error. Beginning y-values were not sorted.");
-        console.log(`Beginning y-values are:`);
+        console.log(`Beginning y-values are below.`);
         console.log(beginningYValues);
       }
 
       if (endingYValues.findIndex(endYVal => endYVal !== this.yWindowUpperString) !== -1) {
         console.log("\nThere was an error. Ending y-values were not sorted.");
-        console.log(`Ending y-values are:`);
+        console.log(`Ending y-values are below.`);
         console.log(endingYValues);
       }
     }

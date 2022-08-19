@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { create, all, BigNumber } from 'mathjs';
+import { create, all, BigNumber, MathJsStatic } from 'mathjs';
 
 @Injectable({
   providedIn: 'root'
@@ -14,12 +14,16 @@ export class MathExtrasService {
     predictable: false,
     randomSeed: null
   };
-  math: math.MathJsStatic = create(all, this.config);
+  math: MathJsStatic = create(all, this.config);
 
   constructor() { }
 
-  // Below are several comparer functions. MathJS comparer functions cannot accurately compare
-  // numbers smaller than 2.22e^-16. These are meant to fix that 
+  // Below are several comparer functions. From MathJS docs, comparer functions cannot 
+  // accurately compare numbers smaller than 2.22e^-16. These are meant to fix that.
+  isLessThan(leftNumber: BigNumber, rightNumber: BigNumber): boolean {
+    return this.math.isNegative(leftNumber.minus(rightNumber));
+  }
+
   isLessThanOrEqualTo(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
     if (this.isEqual(leftNumber, rightNumber, epsilon)) {
       return true;
@@ -28,8 +32,12 @@ export class MathExtrasService {
     return this.isLessThan(leftNumber, rightNumber);
   }
 
-  isLessThan(leftNumber: BigNumber, rightNumber: BigNumber): boolean {
-    return this.math.isNegative(leftNumber.minus(rightNumber));
+  isEqual(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
+    if (leftNumber.toString() === rightNumber.toString()) {
+      return true;
+    }
+
+    return this.isLessThan(this.math.abs(leftNumber.minus(rightNumber)), epsilon);
   }
 
   isGreaterThanOrEqualTo(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
@@ -42,13 +50,5 @@ export class MathExtrasService {
 
   isGreaterThan(leftNumber: BigNumber, rightNumber: BigNumber): boolean {
     return this.math.isPositive(leftNumber.minus(rightNumber));
-  }
-
-  isEqual(leftNumber: BigNumber, rightNumber: BigNumber, epsilon: BigNumber): boolean {
-    if (leftNumber.toString() === rightNumber.toString()) {
-      return true;
-    }
-
-    return this.isLessThan(this.math.abs(leftNumber.minus(rightNumber)), epsilon);
   }
 }
