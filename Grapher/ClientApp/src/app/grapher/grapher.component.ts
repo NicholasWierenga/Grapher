@@ -86,19 +86,6 @@ export class GrapherComponent implements OnInit {
       this.badEquation = true;
       noInputIssues = false;
     }
-    else {
-      this.equation = this.equation.trim();
-      // This takes the user's input, which MathJS allows to be an equation if they want, then records the 
-      // variables used. Later on, we fix the variables to be x and y if needed and make it into a valid equation.
-      let expression: string = this.math.simplify(this.equation.split("=")[this.equation.split("=").length - 1]).toString();
-      let variables: string = this.getVariables(expression);
-      let onlyVariables: Set<string> = new Set(variables.replace(/\s+/g, ""));
-    }
-    
-    if (onlyVariables.size > 2) {
-      this.badEquationTooManyVariables = true;
-      noInputIssues = false;
-    }
 
     else {
     }
@@ -206,6 +193,16 @@ export class GrapherComponent implements OnInit {
     if (noInputIssues) {
       this.newPointsFoundCount = 0;
       this.savedPointsFoundCount = 0;
+      // This takes the user's input, which MathJS allows to be an equation if they want, then records the 
+      // variables used. Later on, we fix the variables to be x and y if needed and make it into a valid equation.
+      let expression: string = this.math.simplify(this.equation.split("=")[this.equation.split("=").length - 1]).toString();
+      let variables: string = this.getVariables(expression);
+      let onlyVariables: Set<string> = new Set(variables.replace(/\s+/g, ""));
+
+      if (onlyVariables.size > 2) {
+        this.badEquationTooManyVariables = true;
+        return;
+      }
 
       // Checks if expression has valid variables then fixes them
       if ((onlyVariables.has("x") && onlyVariables.size === 1) || !(onlyVariables.has("x") && onlyVariables.has("y"))) { 
