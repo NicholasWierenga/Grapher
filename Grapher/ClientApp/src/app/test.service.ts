@@ -9,48 +9,38 @@ import { Point } from './point';
 })
 
 export class TestService {
-  equation: string = "";
-  xWindowLowerString: string = "";
-  xWindowUpperString: string = "";
-  yWindowLowerString: string = "";
-  yWindowUpperString: string = "";
-  xStepsString: string = "";
-  yStepsString: string = "";
-  config: math.ConfigOptions = {
-    epsilon: 1e-32,
-    matrix: 'Matrix',
-    number: 'BigNumber',
-    precision: 64,
-    predictable: false,
-    randomSeed: null
-  };
-  math: MathJsStatic = create(all, this.config);
+  xWindowLowerString!: string;
+  xWindowUpperString!: string;
+  yWindowLowerString!: string;
+  yWindowUpperString!: string;
+  xStepsString!: string;
+  yStepsString!: string;
+  math: MathJsStatic = this.mathExtras.math;
   xStepDelta: BigNumber = this.math.bignumber("-1");
   yStepDelta: BigNumber = this.math.bignumber("-1");
-  pointsToGraph: Point[] = [];
   graphData: PlotlyJS.Data[] = [];
   graphType: string = "";
   newPointsFoundCount: number = -1;
   savedPointsFoundCount: number = -1;
-  totalPointsFoundCount: number = -1;
+  totalPointsUsed: number = -1;
 
   constructor(private mathExtras: MathExtrasService) { }
 
   // After a trace is added, this is ran to check data that would indicate where a problem is coming from.
   // When an error is found, the console prints out what was found and associated variables.
-  checkForProblems(): void {
+  checkForProblems(points: Point[], equation: string): void {
     let trace: Partial<PlotlyJS.PlotData> = this.graphData[this.graphData.length - 1];
     // Checks for if the amount of points is correct.
-    if (this.graphType !== "3D") {
+    if (this.graphType === "2D") {
       if (trace.x!.length !== parseInt(this.xStepsString) + 1) {
         console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
         console.log(`Correct number should be ${parseInt(this.xStepsString) + 1}. 
         The number found is ${trace.x!.length}.`);
       }
 
-      if (trace.x!.length !== this.pointsToGraph.length) {
+      if (trace.x!.length !== points.length) {
         console.log("\nThere was an error. The amount of lines for the 2D plot isn't the correct amount.");
-        console.log(`this.pointsToGraph has ${this.pointsToGraph.length}. 
+        console.log(`points has ${points.length}. 
         The number of points in trace is ${trace.x!.length}.`);
       }
     }
@@ -63,12 +53,12 @@ export class TestService {
         numberOfPoints.push(trace.y![i]!.toString().split(",").length);
       }
 
-      if (this.pointsToGraph.length !== (parseInt(this.xStepsString) + 1)
+      if (points.length !== (parseInt(this.xStepsString) + 1)
       * (parseInt(this.yStepsString) + 1)) {
         console.log(`\nThere was an error. this.totalPointsFoundCount isn't the same as the amount of points there should be.`);
         console.log(`Correct amount should be: ${(parseInt(this.xStepsString) + 1) 
         * (parseInt(this.yStepsString) + 1)}. 
-        this.pointsToGraph is: ${this.pointsToGraph.length}.`);
+          points is: ${points.length}.`);
       }
 
       if (numberOfLines !== (parseInt(this.xStepsString) + 1)) {
@@ -86,7 +76,7 @@ export class TestService {
     }
 
     // Checks for issues in with how the data is sorted.
-    if (this.graphType !== "3D") {
+    if (this.graphType === "2D") {
       if ([...trace.x!][0]?.toString().split(",")[0] !== this.xWindowLowerString) {
         console.log("\nThere was an error. The data passed to the graph should be sorted, but it wasn't.");
         console.log([...trace.x!][0]?.toString().split(",")[0]);
@@ -146,6 +136,16 @@ export class TestService {
         console.log(`Ending y-values are below.`);
         console.log(endingYValues);
       }
+    }
+
+    if (!equation.includes("y = ") && this.graphType === "2D") {
+      console.log("\nThere was an error. This is not an equation.");
+      console.log(`The equation that was used: ${equation}.`);
+    }
+
+    if (!equation.includes("z = ") && this.graphType === "3D") {
+      console.log("\nThere was an error. This is not an equation.");
+      console.log(`The equation that was used: ${equation}.`);
     }
   }
 

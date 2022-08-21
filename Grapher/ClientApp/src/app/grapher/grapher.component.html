@@ -1,84 +1,92 @@
-<div>
-  <form (ngSubmit)="validateData()">
-    <span class="error" *ngIf="badEquation">
-      You must enter an equation.
-      <br>
-    </span>
-    <input type="text" placeholder="Enter expression here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
-    <br>
-    
-    <span class="error" *ngIf="badXLower">
-      Please enter a valid value for the lower x-window or leave blank.
-      <br>
-    </span>
-    <span class="error" *ngIf="badXUpper">
-      Please enter a valid value for the upper x-window or leave blank.
-      <br>
-    </span>
-    <span class="error" *ngIf="badXWindow">
-      The lower x-window should be less than the upper window.
-      <br>
-    </span>
-    <input type="text" placeholder="Lower bound for x-axis" [(ngModel)]="xWindowLowerString"  [ngModelOptions]="{standalone: true}"/> -
-    <input type="text" placeholder="Upper bound for x-axis" [(ngModel)]="xWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
-    <br>
-    <span class="error" *ngIf="badXSteps">
-      Please enter a valid value for the amount of steps along the x-axis or leave blank.
-      <br>
-    </span>
-    <span class="error" *ngIf="badXStepsIsLessThanZero">
-      The step value cannot be negative.
-      <br>
-    </span>
-    <span class="error" *ngIf="badXStepsIsDecimal">
-      The step value cannot be a decimal.
-      <br>
-    </span>
-    <input type="text" placeholder="Steps to take on x-axis" [(ngModel)]="xStepsString"  [ngModelOptions]="{standalone: true}"/>
-    <br>
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
 
-    <span class="error" *ngIf="badYLower">
-      Please enter a valid value for the lower y-window or leave blank.
+<div class="w3-card-4">
+  <div class="w3-container w3-light-grey" style = "padding: 10px 10px 10px 10px;">
+    <form (ngSubmit)="validateData()">
+      <span class="error" *ngIf="badEquation">
+        You must enter an equation.
+        <br>
+      </span>
+      <span class="error" *ngIf="badEquationTooManyVariables">
+        There must be at most 2 variables.
+        <br>
+      </span>
+      <input type="text" placeholder="Enter expression here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
       <br>
-    </span>
-    <span class="error" *ngIf="badYUpper">
-      Please enter a valid value for the upper y-window or leave blank.
-      <br>
-    </span>
-    <span class="error" *ngIf="badYWindow">
-      The lower y-window should be less than the upper window.
-      <br>
-    </span>
-    <input type="text" placeholder="Lower bound for y-axis" [(ngModel)]="yWindowLowerString"  [ngModelOptions]="{standalone: true}"/> - 
-    <input type="text" placeholder="Upper bound for y-axis" [(ngModel)]="yWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
-    <br>
-    <span class="error" *ngIf="badYSteps">
-      Please enter a valid value for the amount of steps along the y-axis or leave blank.
-      <br>
-    </span>
-    <span class="error" *ngIf="badYStepsIsLessThanZero">
-      The step value cannot be negative.
-      <br>
-    </span>
-    <span class="error" *ngIf="badYStepsIsDecimal">
-      The step value cannot be a decimal.
-      <br>
-    </span>
-    <input type="text" placeholder="Steps to take on y-axis" [(ngModel)]="yStepsString"  [ngModelOptions]="{standalone: true}"/>
-    <br>
 
-    <input type="submit">
-  </form>
+      <span class="error" *ngIf="badXLower">
+        Please enter a valid value for the lower x-window or leave blank.
+        <br>
+      </span>
+      <span class="error" *ngIf="badXUpper">
+        Please enter a valid value for the upper x-window or leave blank.
+        <br>
+      </span>
+      <span class="error" *ngIf="badXWindow">
+        The lower x-window should be less than the upper window.
+        <br>
+      </span>
+      <input type="text" placeholder="Lower bound for x-axis" [(ngModel)]="xWindowLowerString"  [ngModelOptions]="{standalone: true}"/> -
+      <input type="text" placeholder="Upper bound for x-axis" [(ngModel)]="xWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
+      <br>
+      <span class="error" *ngIf="badXSteps">
+        Please enter a valid value for the amount of steps along the x-axis or leave blank.
+        <br>
+      </span>
+      <span class="error" *ngIf="badXStepsIsNegative">
+        The step value cannot be negative.
+        <br>
+      </span>
+      <span class="error" *ngIf="badXStepsIsDecimal">
+        The step value cannot be a decimal.
+        <br>
+      </span>
+      <input type="text" placeholder="Steps to take on x-axis" [(ngModel)]="xStepsString"  [ngModelOptions]="{standalone: true}"/>
+      <br>
 
-  <button (click)="purgeGraph()">Clear All</button>
-</div>
+      <span class="error" *ngIf="badYLower">
+        Please enter a valid value for the lower y-window or leave blank.
+        <br>
+      </span>
+      <span class="error" *ngIf="badYUpper">
+        Please enter a valid value for the upper y-window or leave blank.
+        <br>
+      </span>
+      <span class="error" *ngIf="badYWindow">
+        The lower y-window should be less than the upper window.
+        <br>
+      </span>
+      <input type="text" placeholder="Lower bound for y-axis" [(ngModel)]="yWindowLowerString"  [ngModelOptions]="{standalone: true}"/> - 
+      <input type="text" placeholder="Upper bound for y-axis" [(ngModel)]="yWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
+      <br>
+      <span class="error" *ngIf="badYSteps">
+        Please enter a valid value for the amount of steps along the y-axis or leave blank.
+        <br>
+      </span>
+      <span class="error" *ngIf="badYStepsIsNegative">
+        The step value cannot be negative.
+        <br>
+      </span>
+      <span class="error" *ngIf="badYStepsIsDecimal">
+        The step value cannot be a decimal.
+        <br>
+      </span>
+      <input type="text" placeholder="Steps to take on y-axis" [(ngModel)]="yStepsString"  [ngModelOptions]="{standalone: true}"/>
+      <br>
 
-<div class="graph">
-  <p *ngIf="this.totalPointsFoundCount !== 0">
-    Saved points retrieved: {{this.savedPointsFoundCount}} <br>
-    Newly calculated points: {{this.newPointsFoundCount}} <br>
-    Total points in newest trace: {{this.totalPointsFoundCount}} <br>
-  </p>
-  
-  <div id="plotlyChart" style="width:80%; height: 80%"></div>
+      <input class="clickables" type="submit">
+
+      <button type="button" class="clickables" (click)="purgeGraph()">Clear All</button>
+    </form>
+  </div>
+
+  <div  class="w3-container">
+    <p *ngIf="this.totalPointsUsed !== 0">
+      Saved points retrieved: {{this.savedPointsFoundCount}} <br>
+      Newly calculated points: {{this.newPointsFoundCount}} <br>
+      Total points in graph: {{this.totalPointsUsed}} <br>
+    </p>
+
+    <div id="plotlyChart" style="width:100%; height: 100%"></div>
+  </div>
 </div>

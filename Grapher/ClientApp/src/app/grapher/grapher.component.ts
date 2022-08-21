@@ -13,6 +13,8 @@ import { MathExtrasService } from '../math-extras.service';
 })
 
 // TODO: Fix bug where very large numbers 111111111111111 are turned into 111111111111111x.
+// TODO: Things like x^.00000001 turns into a 3D function because of simplifying into xe^-something
+// The above issue also works for large decimal multiple of x.
 export class GrapherComponent implements OnInit {
   equation: string = "";
   xWindowLowerString!: string;
@@ -23,22 +25,14 @@ export class GrapherComponent implements OnInit {
   yStepsString!: string;
   xStepDelta!: math.BigNumber;
   yStepDelta!: math.BigNumber;
-  pointsToGraph: Point[] = [];
   graphData: PlotlyJS.Data[] = [];
   graphType: string = "";
   newPointsFoundCount: number = 0;
   savedPointsFoundCount: number = 0;
-  totalPointsFoundCount: number = 0;
-  config: math.ConfigOptions = {
-    epsilon: 1e-32,
-    matrix: 'Matrix',
-    number: 'BigNumber',
-    precision: 64,
-    predictable: false,
-    randomSeed: null,
-  };
-  math: math.MathJsStatic = create(all, this.config);
+  totalPointsUsed: number = 0;
+  math: math.MathJsStatic = this.mathExtras.math;
   badEquation!: boolean 
+  badEquationTooManyVariables!: boolean
   badXLower!: boolean
   badXUpper!: boolean
   badYLower!: boolean
@@ -47,19 +41,20 @@ export class GrapherComponent implements OnInit {
   badYSteps!: boolean
   badXWindow!: boolean
   badYWindow!: boolean
-  badXStepsIsLessThanZero!: boolean;
-  badYStepsIsLessThanZero!: boolean;
+  badXStepsIsNegative!: boolean;
+  badYStepsIsNegative!: boolean;
   badXStepsIsDecimal!: boolean;
   badYStepsIsDecimal!: boolean;
   
   constructor(private graphService: GraphService, private mathExtras: MathExtrasService,
     private testService: TestService) { }
 
-  // TODO: Windowing still needs work. It's possible to set windows to bad values and not have them display on the front-end.
+  // TODO: Move a lot of the above booleans
   // This checks if the data the user is sending can be used. If not, error messages will be shown on the front-end.
   validateData(): void {
     let noInputIssues = true;
     this.badEquation = false;
+    this.badEquationTooManyVariables = false;
     this.badXLower = false;
     this.badXUpper = false;
     this.badYLower = false;
@@ -68,36 +63,53 @@ export class GrapherComponent implements OnInit {
     this.badYSteps = false;
     this.badXWindow = false;
     this.badYWindow = false;
-    this.badXStepsIsLessThanZero = false;
-    this.badYStepsIsLessThanZero = false;
+    this.badXStepsIsNegative = false;
+    this.badYStepsIsNegative = false;
     this.badXStepsIsDecimal = false;
     this.badYStepsIsDecimal = false;
-    
-    // TODO: There's still bad equation inputs that will error out the program.
-    // Something like "qwerty" should fail, because that would result in more than 2 variables.
-    // This could be solved sort of like the TODO below where we'd swap 
-    if (this.equation.length === 0) {
-      this.badEquation = true;
-      noInputIssues = false;
-    }
+    let expression: string = "";
+    let variables: string = "";
+    let onlyVariables: Set<string> = new Set([]);
 
-    this.xStepsString = this.xStepsString ?? "100";
-    this.yStepsString = this.yStepsString ?? "100";
-    this.xWindowLowerString = this.xWindowLowerString ?? "-10";
-    this.yWindowLowerString = this.yWindowLowerString ?? "-10";
+
+    this.xStepsString = this.xStepsString || "100";
+    this.yStepsString = this.yStepsString || "100";
+    this.xWindowLowerString = this.xWindowLowerString || "-10";
+    this.yWindowLowerString = this.yWindowLowerString || "-10";
     // TODO: This sets the y-windows for 2D as well, which can cut off parts of graph.
     // The default behavior empty-valued 2D equations should be to let PlotlyJS decide y-windowing.
     // A way to do this could be to change one of the functions handling variables to something
     // that tacks on "y = " or "z = " and then return an equation instead.
     // Then we can check if what the current equation has a either of those above strings
     // to decide if we should use default y-windows or keep it empty.
+    if (this.equation.trim().length === 0) {
+      this.badEquation = true;
+      noInputIssues = false;
+    }
+    else {
+      this.equation = this.equation.trim();
+      // This takes the user's input, which MathJS allows to be an equation if they want, then records the 
+      // variables used. Later on, we fix the variables to be x and y if needed and make it into a valid equation.
+      let expression: string = this.math.simplify(this.equation.split("=")[this.equation.split("=").length - 1]).toString();
+      let variables: string = this.getVariables(expression);
+      let onlyVariables: Set<string> = new Set(variables.replace(/\s+/g, ""));
+    }
+    
+    if (onlyVariables.size > 2) {
+      this.badEquationTooManyVariables = true;
+      noInputIssues = false;
+    }
+
+    else {
+    }
 
     // Later in the program we convert to bignumber these, so we want to make sure users
     // aren't entering something that can't be converted.
     try {
       this.math.bignumber(this.xWindowLowerString);
 
-      this.xWindowUpperString = this.xWindowUpperString ?? this.math.bignumber(this.xWindowLowerString).plus("20").toString();
+      this.xWindowUpperString = this.xWindowUpperString || this.math.bignumber(this.xWindowLowerString)
+      .plus(this.math.bignumber("20")).toString();
     }
     catch {
       this.badXLower = true;
@@ -107,7 +119,8 @@ export class GrapherComponent implements OnInit {
     try {
       this.math.bignumber(this.yWindowLowerString);
 
-      this.yWindowUpperString = this.yWindowUpperString ?? this.math.bignumber(this.yWindowLowerString).plus("20").toString();
+      this.yWindowUpperString = this.yWindowUpperString || this.math.bignumber(this.yWindowLowerString)
+      .plus(this.math.bignumber("20")).toString();
     }
     catch {
       this.badYLower = true;
@@ -130,6 +143,22 @@ export class GrapherComponent implements OnInit {
       noInputIssues = false;
     }
 
+    if (!this.badXUpper && !this.badXLower) {
+      if (this.mathExtras.isLessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString)
+          , this.math.bignumber(this.xWindowLowerString), this.math.bignumber("1e-32"))) {
+        this.badXWindow = true;
+        noInputIssues = false;
+      }
+    }
+
+    if (!this.badYUpper && !this.badYLower) {
+      if (this.mathExtras.isLessThanOrEqualTo(this.math.bignumber(this.yWindowUpperString)
+          , this.math.bignumber(this.yWindowLowerString), this.math.bignumber("1e-32"))) {
+        this.badYWindow = true;
+        noInputIssues = false;
+      } 
+    }
+
     try {
       this.math.bignumber(this.xStepsString);
     }
@@ -138,13 +167,16 @@ export class GrapherComponent implements OnInit {
       noInputIssues = false;
     }
 
+    // These require converting the string into a bignumber, which is why we have the if statement.
+    // This if statement can only ever be passed if the above try did not fail.
     if (!this.badXSteps) {
       if (this.mathExtras.isLessThan(this.math.bignumber(this.xStepsString), this.math.bignumber("0"))) {
-        this.badXStepsIsLessThanZero = true;
+        this.badXStepsIsNegative = true;
         noInputIssues = false;
       }
 
-      if (this.math.round(this.math.bignumber(this.xStepsString)).toString() !== this.math.bignumber(this.xStepsString).toString()) {
+      if (this.math.round(this.math.bignumber(this.xStepsString)).toString() 
+          !== this.math.bignumber(this.xStepsString).toString()) {
         this.badXStepsIsDecimal = true;
         noInputIssues = false;
       }
@@ -160,172 +192,129 @@ export class GrapherComponent implements OnInit {
 
     if (!this.badYSteps) {
       if (this.mathExtras.isLessThan(this.math.bignumber(this.yStepsString), this.math.bignumber("0"))) {
-        this.badYStepsIsLessThanZero = true;
+        this.badYStepsIsNegative = true;
         noInputIssues = false;
       }
 
-      if (this.math.round(this.math.bignumber(this.yStepsString)).toString() !== this.math.bignumber(this.yStepsString).toString()) {
+      if (this.math.round(this.math.bignumber(this.yStepsString)).toString() 
+          !== this.math.bignumber(this.yStepsString).toString()) {
         this.badYStepsIsDecimal = true;
         noInputIssues = false;
       }
     }
-
-    try {
-      this.mathExtras.isLessThan(this.math.bignumber(this.xWindowUpperString), this.math.bignumber(this.xWindowLowerString))
-    }
-    catch {
-      this.badXWindow = true;
-      noInputIssues = false;
-    }
-
-    try {
-      this.mathExtras.isLessThan(this.math.bignumber(this.yWindowUpperString), this.math.bignumber(this.yWindowLowerString))
-    } 
-    catch {
-      this.badYWindow = true;
-      noInputIssues = false;
-    }
-
+    
     if (noInputIssues) {
-      this.redoPreviousTraces();
+      this.newPointsFoundCount = 0;
+      this.savedPointsFoundCount = 0;
+
+      // Checks if expression has valid variables then fixes them
+      if ((onlyVariables.has("x") && onlyVariables.size === 1) || !(onlyVariables.has("x") && onlyVariables.has("y"))) { 
+        expression = this.fixExpressionVariables(expression, variables);
+      }
+
+      this.graphType = this.getGraphType(onlyVariables);
+      
+      this.equation = this.getEquation(expression, this.graphType);
+
+      this.findTrace(this.equation);
+      
+      this.redoTraces();
     }
   }
 
   // Recalculates previously used equations at the new window settings and steps.
-  redoPreviousTraces(): void {
-    this.newPointsFoundCount = 0;
-    this.savedPointsFoundCount = 0;
-    let userXStepsString: string = this.xStepsString;
-    let userYStepsString: string = this.yStepsString;
-    let userEquation: string = this.equation;
+  redoTraces(): void {
     let amountOfRedos: number = 0;
+    let startingEquation: string = this.equation;
+    let beginningData: PlotlyJS.Data[] = this.graphData;
 
-    this.getGraphType(); // Graphs current expression.
-    
-    if (this.graphData.length >= 1) {
-      this.graphData.forEach(data => {
-        if (userEquation === data.name!.split("=")[1]) {
-          return; // We don't want to re-evaluate the equation the user just put in. It was done a few lines above.
-        }
+    // Looks through previous traces, redoing whatever should be according to graphType and window settings.
+    beginningData.forEach(data => {
+      // The .split(",") is for 3D data. Those return an array filled with the same number, but we only want one.
+      let oldLowerXString: string = data.x![0]!.toString().split(",")[0];
+      let oldUpperXString: string = data.x![data.x!.length - 1]!.toString().split(",")[0];
+      if (this.graphType === "3D") {
+        oldUpperXString = data.x![0]!.toString().split(",")[data.x!.length - 1];
+      }
+      let oldLowerYString: string = data.y![0]!.toString().split(",")[0];
+      let oldUpperYString: string = data.y![data.y!.length - 1]!.toString().split(",")[0];
 
-        this.equation = data.name!;
-        let oldLowerXString: string = data.x![0]!.toString();
-        let oldUpperXString: string = data.x![data.x!.length - 1]!.toString();
-        let oldLowerYString: string = data.y![0]!.toString();
-        let oldUpperYString: string = data.y![data.y!.length - 1]!.toString();
+      // We redo any traces found to have different window settings.
+      if (((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString) && data.name!.includes("y = "))
+       || ((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString
+         || oldLowerYString !== this.yWindowLowerString || oldUpperYString !== this.yWindowUpperString) && data.name!.includes("z = "))) {
+        this.findTrace(data.name!);
 
-        // We redo any traces found to have different window settings.
-        if ((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString)
-          && data.name!.includes("y")) {
-          this.equation = data.name!;
-          console.log("Old 2D trace found with bad windows. It is: " + data.name);
-  
-          this.getGraphType();
-  
-          amountOfRedos++;
-        }
-        else if ((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString
-          || oldLowerYString !== this.yWindowLowerString || oldUpperYString !== this.yWindowUpperString)
-          && data.name!.includes("z")) {
-          this.equation = data.name!;
-          console.log("Old 3D trace found with bad windows. It is: " + data.name);
-        
-          this.getGraphType();
-        
-          amountOfRedos++;
-        }
-      })
-    }
+        amountOfRedos++;
+      }
+    })
 
-    console.log("Amount of redone equations: " + amountOfRedos);
+    console.log(`Amount of redone equations: ${amountOfRedos}.`);
 
-    // After the redos are finished, we set the user's input back to normal on the front-end.
-    this.xStepsString = userXStepsString; 
-    this.yStepsString = userYStepsString;
-    this.equation = userEquation;
+    this.equation = startingEquation.split("= ")[1];
   }
 
-  getGraphType(): void {
-    // TODO: Start moving some of this stuff out of here. It feels weird to have this long of a method for something
-    // simple like getting graphType.
-    this.pointsToGraph = []; // maybe set length to 0 instead to fix the always adding 1 new point problem?
-    // gives the simplified expression right of = to ensure things like y = x + 2, y = -1 + x + 3, are both turned into x + 2.
-    // mathjs allows for y=5x to be a valid input to graph, but we only want the expression, which is why we use .split("=").
-    let expression: string = this.math.simplify(this.equation.split("=")[this.equation.split("=").length - 1]).toString();
-    let variables: string = this.getVariables(expression);
-    let onlyVariables: Set<string> = new Set(variables.replace(/\s+/g, ""));
-    
-    if ((onlyVariables.has("x") && onlyVariables.size === 1) 
-    || !(onlyVariables.has("x") && onlyVariables.has("y"))) { // checks if expression has valid variables
-      let expressionAndVariables: string[] = this.fixExpressionVariables(expression, variables);
-      expression = expressionAndVariables[0];
-      variables = expressionAndVariables[1];
+  findTrace(equation: string): void {
+    this.xStepDelta = this.math.bignumber(this.xWindowUpperString).minus(this.xWindowLowerString).dividedBy(this.xStepsString);
+
+    if (this.graphType === "3D") {
+      this.yStepDelta = this.math.bignumber(this.yWindowUpperString).minus(this.yWindowLowerString).dividedBy(this.yStepsString);
     }
-    
-    this.xStepDelta = this.math.bignumber(this.math.bignumber(this.xWindowUpperString)
-    .minus(this.xWindowLowerString).dividedBy(this.xStepsString));
-    
-    
-    switch (onlyVariables.size) {
-      case 0: {
-        // This is for constant-valued functions. Because they're so simple, there's little sense is storing them to the DB.
-        // This case could be deleted and these functions will be treated like all other 2D functions, but it's likely that
-        // storing and then sifting through the DB for points would result in a slow graph than just calculating it.
-        console.log("Constant function found.");
-        this.graphType = "constant";
-        expression = `y = ${expression}`;
-        this.pointsToGraph = this.getNewPoints(this.pointsToGraph, expression);
 
-        this.verifyInput(expression, onlyVariables);
+    this.checkEquation(equation);
 
-        this.getGraph();
+    // This graphs a constant-value function. Since these are very simple, they're calculated each time and not saved.
+    if (equation.match(/[\d\.]+/)?.toString() === equation.split("= ")[1]) {
+      let points: Point[] = this.getNewPoints(equation, []);
 
-        return;
-      }
-      case 1: {
-        console.log("Single variable function found.");
-        this.graphType = "2D";
-        expression = `y = ${expression}`;
+      this.getGraph(points);
+    }
+    else {
+      this.getAllPoints(equation);
+    }
+  }
+
+  // Checks the equation for if it's already been graphed or if the equation requires a different type of graph.
+  checkEquation(equation: string): void {
+    for (const data of this.graphData) {
+      if (equation[0] !== data.name![0]) { // Checks if the current equation contains the same starting letter (y or z).
+        console.log("Dimension mis-match found. Deleting graph.");
+        this.purgeGraph();
+
         break;
+      }
+    };
+    
+    let indexOfEquation: number = this.graphData.findIndex(data => data.name === equation);
+    if (indexOfEquation !== -1) {
+      console.log("This equation was already used before. Deleting.");
+      PlotlyJS.deleteTraces("plotlyChart", indexOfEquation);
+
+      if (this.graphType === "2D") {
+        this.totalPointsUsed -= this.graphData[indexOfEquation].x!.length;
+      }
+      else {
+        this.totalPointsUsed -= this.graphData[indexOfEquation].x!.length * this.graphData[indexOfEquation].y!.length;
+      }
+
+      this.graphData.splice(indexOfEquation, 1);
+    }
+  }
+
+  getGraphType(variableSet: Set<string>): string {
+    switch (variableSet.size) {
+      case 0:
+      case 1: {
+        return "2D";
       }
       case 2: {
-        console.log("Two variable function found.");
-        this.graphType = "3D";
-        this.yStepDelta = this.math.bignumber(this.yWindowUpperString)
-        .minus(this.yWindowLowerString).dividedBy(this.yStepsString);
-        expression = `z = ${expression}`;
-        break;
+        return "3D";
       }
       default: {
         console.log("An error has occurred.");
-        console.log(`Bad expression: ${expression}.`);
         console.log(`User input was: ${this.equation}.`);
+        return "error";
       }
-    }
-
-    this.verifyInput(expression, onlyVariables);
-    
-    this.getAllPoints(expression);
-  }
-
-  verifyInput(equation: string, onlyVariables: Set<string>): void {
-    // Checks if user's equation requires a dimension change for the graph. If so, graph is deleted.
-    this.graphData.every(data => {
-      if (onlyVariables.size <= 1 && data.name!.includes("z")
-      || onlyVariables.size === 2 && !data.name!.includes("z")) {
-        console.log("Dimension mismatch found. Resetting graph.");
-        
-        this.purgeGraph();
-
-        return false; // return false; in .every() is equivalent to break;
-      }
-    });
-
-    // Deletes current data for an equation if it has already be graphed.
-    let indexOfEquation: number = this.graphData.findIndex(data => data.name === equation);
-    if (indexOfEquation !== -1) {
-      PlotlyJS.deleteTraces("plotlyChart", indexOfEquation);
-      this.graphData.splice(indexOfEquation, 1);
     }
   }
 
@@ -350,44 +339,58 @@ export class GrapherComponent implements OnInit {
   // Swaps variables in the expression out for x and y, so expression like c+d, g+h, x+j, all turn into and save and retrieve
   // points using the same expression x+y. This is to avoid equations that are functionally the same from needing to
   // calculate known points again.
-  fixExpressionVariables(expression: string, variables: string): string[] {
-    let varSet: Set<string> = new Set(variables.split(""));
-    let index: number = 0;
-    varSet.delete(" ");
+  fixExpressionVariables(expression: string, variables: string): string {
+    let variableSet: Set<string> = new Set(variables.split(""));
+    let index: number = -1;
+    variableSet.delete(" ");
 
-    varSet.forEach(char => { // Iterates through each variable used, replacing the non-x/y with x and y.
-      if (char === "x" || (char === "y" && varSet.size !== 1)) {
+    variableSet.forEach(char => { // Iterates through each variable used, replacing the non-x/y with x and y.
+      if (char === "x" || (char === "y" && variableSet.size !== 1)) {
         return; // This is JS's way of doing continue in a for loop.
       }
       
       while (variables.includes(char)) {
         index = variables.indexOf(char);
 
-        if (expression[index] === [...varSet][0]) { // [...varSet] turns the set into an array
+        if (expression[index] === [...variableSet][0]) { // [...varSet] turns the set into an array
           expression = expression.substring(0, index) + "x" + expression.substring(index + 1, expression.length);
           variables = variables.substring(0, index) + "x" + variables.substring(index + 1, variables.length);
         }
 
-        if (expression[index] === [...varSet][1]) {
+        if (expression[index] === [...variableSet][1]) {
           expression = expression.substring(0, index) + "y" + expression.substring(index + 1, expression.length);
           variables = variables.substring(0, index) + "y" + variables.substring(index + 1, variables.length);
         }
       }
     });
 
-    return [this.math.simplify(expression).toString(), variables];
+    return expression;
   }
 
-  // Retrieves points from DB and calculates unknown points
+  // Takes in an expression that is meant to have its variables fixed and uses graphType to determine what to set it equal to.
+  getEquation(expression: string, graphType: string): string {
+    expression = this.math.simplify(expression).toString().replace(/\s+/g, "");
+    
+    if (graphType === "2D") {
+      return `y = ${expression}`;
+    }
+    else {
+      return `z = ${expression}`;
+    }
+  }
+
+  // Retrieves points from DB and then calculates unknown points.
   getAllPoints(equation: string): void {
+    let pointsToGraph: Point[] = [];
+
     this.graphService.getPoints(equation).subscribe(points => {
-      this.pointsToGraph = this.filterPoints(points);
+      pointsToGraph = this.filterPoints(points);
 
-      console.log(`Retrieved ${this.pointsToGraph.length} point(s) from the DB.`);
+      console.log(`Retrieved ${pointsToGraph.length} point(s) from the DB.`);
+      
+      pointsToGraph = this.getNewPoints(equation, pointsToGraph);
 
-      this.pointsToGraph = this.getNewPoints(this.pointsToGraph, equation);
-
-      this.getGraph();
+      this.getGraph(pointsToGraph);
     });
   }
 
@@ -424,31 +427,30 @@ export class GrapherComponent implements OnInit {
   }
 
   // This takes and has sorted the points passed to it then calculates unknown points. Calculated points are then saved in the DB.
-  getNewPoints(knownPoints: Point[], equation: string): Point[] {
+  getNewPoints(equationToUse: string, knownPoints: Point[]): Point[] {
     let newPoints: Point[] = [];
     let currXVal!: math.BigNumber;
     let currYVal!: math.BigNumber;
     let sortedPoints: Point[] = this.sortKnownPoints(knownPoints);
 
+    // We iterate through an array, filling in undefined elements with points according to index.
     for (const [index, point] of sortedPoints.entries()) {
       if (point !== undefined) {
         continue;
       }
 
       currXVal = this.math.bignumber(this.xWindowLowerString).add(this.xStepDelta.mul(index % (parseInt(this.yStepsString!) + 1)));
-
-      if (this.graphType === "2D" || this.graphType === "constant") {
-        sortedPoints[index] = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
-          ycoord: this.math.evaluate(equation, {x: this.math.bignumber(currXVal)}).toString(), zcoord: null};
+      
+      if (this.graphType === "2D") {
+        sortedPoints[index] = {id: undefined!, equation: equationToUse, xcoord: currXVal.toString(),
+          ycoord: this.math.evaluate(equationToUse, {x: currXVal}).toString(), zcoord: null};
       }
-      // Program keeps calculating the final yStepsString number of points for 3D graphs.
       else if (this.graphType === "3D") {
-        currYVal = this.math.bignumber(this.yWindowLowerString).add(this.yStepDelta.mul(this.math
-        .floor(index / (parseInt(this.yStepsString!) + 1))));
+        currYVal = this.math.bignumber(this.yWindowLowerString).add(this.yStepDelta
+          .mul(this.math.floor(index / (parseInt(this.yStepsString!) + 1))));
 
-        sortedPoints[index] = {id: undefined!, equation: equation, xcoord: currXVal.toString(),
-          ycoord: currYVal.toString(), zcoord: this.math.evaluate(equation,
-          {x: this.math.bignumber(currXVal), y: this.math.bignumber(currYVal)}).toString()};
+        sortedPoints[index] = {id: undefined!, equation: equationToUse, xcoord: currXVal.toString(),
+          ycoord: currYVal.toString(), zcoord: this.math.evaluate(equationToUse, {x: currXVal, y: currYVal}).toString()};
       }
 
       newPoints.push(sortedPoints[index]);
@@ -456,15 +458,31 @@ export class GrapherComponent implements OnInit {
 
     this.newPointsFoundCount += newPoints.length;
 
-    // TODO: There's a payload too large error for many, many point calls. Break up requests into a while loop.
-    // Try doing something like wrapping this in a while loop with a condition that newPoints.length !== 0.
-    // Then call the .subscribe() and delete the packet of points(maybe through .splice() in the call, or after it)
-    // then continue the loop. Keep calling and deleting until nothing is left.
     // We don't want to save constant functions to the DB. They are simple enough to calculate every time.
-    if (this.graphType !== "constant") {
-      this.graphService.createPoints(newPoints).subscribe(() => {
-        console.log("Newly calculated points: " + newPoints.length);
-      });
+    if (equationToUse.match(/[\d\.]+/)?.toString() !== equationToUse.split("= ")[1] && newPoints.length !== 0) {
+      let packetNumber: number = 1;
+      let maxPacketSize: number = 10000;
+      let amountToSend: number = newPoints.length % maxPacketSize;
+      let packetAmount: number = this.math.floor(newPoints.length / maxPacketSize) + 1;
+
+      // Sometimes newPoints can be very large and can't be sent in one go. It is broken up here to avoid that problem.
+      while (newPoints.length !== 0) {
+        if (newPoints.length % maxPacketSize === 0) {
+          amountToSend = maxPacketSize;
+        }
+        else {
+          amountToSend %= maxPacketSize;
+        }
+
+        this.graphService.createPoints(newPoints.splice(0, amountToSend)).subscribe();
+        
+        console.log(`Sending packet ${packetNumber}/${packetAmount} with ${amountToSend} points.`);
+        if (newPoints.length !== 0) {
+          console.log(`${newPoints.length} still need to be sent.`);
+        }
+
+        packetNumber++;
+      }
     }
 
     return sortedPoints;
@@ -476,7 +494,7 @@ export class GrapherComponent implements OnInit {
   sortKnownPoints(knownPoints: Point[]): Point[] {
     let sortedPoints: Point[] = [];
 
-    if (this.graphType === "2D" || this.graphType === "constant") {
+    if (this.graphType === "2D") {
       sortedPoints.length = parseInt(this.xStepsString) + 1;
     }
     else if (this.graphType === "3D") {
@@ -506,61 +524,24 @@ export class GrapherComponent implements OnInit {
   }
 
   // TODO: There's an issue when requesting too many points from the program. It's an ArrayBuffer error.
-  getGraph(): void {
+  getGraph(points: Point[]): void {
     let layout: Partial<PlotlyJS.Layout> = {
-      xaxis: {range: [this.math.bignumber(this.xWindowLowerString).toString(), this.math.bignumber(this.xWindowUpperString).toString()]}
+      xaxis: {range: [this.math.bignumber(this.xWindowLowerString).toString(), 
+        this.math.bignumber(this.xWindowUpperString).toString()]}
     };
     
     if (this.yWindowLowerString !== "" && this.yWindowUpperString !== "") {
-      layout.yaxis = {range: [this.math.bignumber(this.yWindowLowerString).toString(), this.math.bignumber(this.yWindowUpperString).toString()]};
+      layout.yaxis = {range: [this.math.bignumber(this.yWindowLowerString).toString(), 
+        this.math.bignumber(this.yWindowUpperString).toString()]};
     }
 
-    let config: Partial<PlotlyJS.Config> = {
-      //responsive: true
-    }
-
-    if (this.graphType === "3D") {
-      let splitPoints: Point[][] = [];
-      let skipAmount: number = parseInt(this.xStepsString) + 1;
-
-      let copyOfPoints: Point[] = [];
-      Object.assign(copyOfPoints, this.pointsToGraph);
-
-      // Because we sorted pointsToGraph by xcoord, we can split it apart into a number of arrays, each with the same xcoord
-      while (splitPoints.length < parseInt(this.yStepsString) + 1) {
-        splitPoints.push(copyOfPoints.splice(0, skipAmount));
-      }
-
-      // PlotlyJS likes to have 3d graph data that is split up into a number of arrays, each one signifying a line.
-      // For here, since we sorted by xcoord above, splitPoints[0] would correspond to the line of x,y,z coords where x=xWindowLowerString.
-      // Without splitting the array, PlotlyJS assumes everything is contained on one great big line and starts connecting points and forming
-      // surfaces together, often causing false surfaces in the output.
-      var trace: PlotlyJS.Data = {
-        x: splitPoints.map(pointArray => pointArray.map(point => point.xcoord)),
-        y: splitPoints.map(pointArray => pointArray.map(point => point.ycoord)),
-        z: splitPoints.map(pointArray => pointArray.map(point => point.zcoord)),
-        name: this.pointsToGraph[0].equation,
-        type: "surface",
-        hovertemplate: `(%{x},%{y},%{z})` // %{x} is what tells PlotlyJS to display the xcoord for what point the cursor is on.
-      };
-    }
-    else {
-      var trace: PlotlyJS.Data = {
-        x: this.pointsToGraph.map(point => point.xcoord),
-        y: this.pointsToGraph.map(point => point.ycoord),
-        name: this.pointsToGraph[0].equation,
-        type: "scatter",
-        hovertemplate: `(%{x},%{y})`
-      };
-    }
+    let trace: PlotlyJS.Data = this.getTrace(points);
 
     this.graphData.push(trace);
 
-    this.totalPointsFoundCount = this.newPointsFoundCount + this.savedPointsFoundCount;
-
     if (this.graphData.length === 1) {
-      layout.showlegend = true; // PlotlyJS does not support legend showing legend for surface plots, so this only matters for 2D.
-      PlotlyJS.newPlot("plotlyChart", [trace], layout, config);
+      //layout.showlegend = true; // PlotlyJS does not support legend showing legend for surface plots, so this only matters for 2D.
+      PlotlyJS.newPlot("plotlyChart", [trace], layout);
     }
     else {
       PlotlyJS.addTraces("plotlyChart", [trace]);
@@ -571,13 +552,54 @@ export class GrapherComponent implements OnInit {
 
     this.passDataToTestService();
 
-    this.testService.checkForProblems();
+    this.testService.checkForProblems(points, trace.name!);
+  }
+
+  // Takes in an array of points and splits it up into PlotlyJS data.
+  getTrace(points: Point[]): PlotlyJS.Data {
+    this.totalPointsUsed += points.length;
+
+    if (this.graphType === "3D") {
+      let splitPoints: Point[][] = [];
+      let skipAmount: number = parseInt(this.xStepsString) + 1;
+
+      let copyOfPoints: Point[] = [];
+      Object.assign(copyOfPoints, points);
+
+      // Because we sorted pointsToGraph by xcoord, we can split it apart into a number of arrays, each with the same xcoord
+      while (splitPoints.length < parseInt(this.yStepsString) + 1) {
+        splitPoints.push(copyOfPoints.splice(0, skipAmount));
+      }
+
+      // PlotlyJS likes to have 3d graph data that is split up into a number of arrays, each one signifying a line.
+      // For here, since we sorted by xcoord above, splitPoints[0] would correspond to the line of points along x-axis.
+      // Without splitting the array, PlotlyJS assumes everything is contained on one great big line and starts 
+      // connecting points and forming surfaces together, often causing false surfaces in the output.
+      var trace: PlotlyJS.Data = {
+        x: splitPoints.map(pointArray => pointArray.map(point => point.xcoord)),
+        y: splitPoints.map(pointArray => pointArray.map(point => point.ycoord)),
+        z: splitPoints.map(pointArray => pointArray.map(point => point.zcoord)),
+        name: points[0].equation,
+        type: "surface",
+        hovertemplate: `(%{x},%{y},%{z})` // %{x} is what tells PlotlyJS to display the xcoord for what point the cursor is on.
+      };
+    }
+    else {
+      var trace: PlotlyJS.Data = {
+        x: points.map(point => point.xcoord),
+        y: points.map(point => point.ycoord),
+        name: points[0].equation,
+        type: "scatter",
+        hovertemplate: `(%{x},%{y})`
+      };
+    }
+
+    return trace;
   }
 
   // This is meant to keep test.service up to date with current data.
   // I like to keep passing data as the program runs to check inputs for any errors.
   passDataToTestService(): void {
-    this.testService.equation = this.pointsToGraph[0].equation;
     this.testService.xWindowLowerString = this.xWindowLowerString;
     this.testService.xWindowUpperString = this.xWindowUpperString;
     this.testService.yWindowLowerString = this.yWindowLowerString;
@@ -586,19 +608,17 @@ export class GrapherComponent implements OnInit {
     this.testService.yStepsString = this.yStepsString;
     this.testService.xStepDelta = this.xStepDelta;
     this.testService.yStepDelta = this.yStepDelta;
-    this.testService.pointsToGraph = this.pointsToGraph;
     this.testService.graphData = this.graphData;
     this.testService.graphType = this.graphType;
     this.testService.newPointsFoundCount = this.newPointsFoundCount;
     this.testService.savedPointsFoundCount = this.savedPointsFoundCount;
-    this.testService.totalPointsFoundCount = this.totalPointsFoundCount;
-    this.testService.config = this.config;
-    this.testService.math = this.math;
+    this.testService.totalPointsUsed = this.totalPointsUsed;
   }
 
   purgeGraph(): void {
     this.graphData = [];
-    this.totalPointsFoundCount = 0;
+    this.totalPointsUsed = 0;
+    
     PlotlyJS.purge("plotlyChart");
   }
 
