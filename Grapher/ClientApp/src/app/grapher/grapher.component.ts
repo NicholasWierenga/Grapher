@@ -25,7 +25,7 @@ export class GrapherComponent implements OnInit {
   yStepsString!: string;
   xStepDelta!: math.BigNumber;
   yStepDelta!: math.BigNumber;
-  graphData: PlotlyJS.Data[] = [];
+  graphData: Partial<PlotlyJS.PlotData>[] = [];
   graphType: string = "";
   newPointsFoundCount: number = 0;
   savedPointsFoundCount: number = 0;
@@ -297,8 +297,6 @@ export class GrapherComponent implements OnInit {
     let indexOfEquation: number = this.graphData.findIndex(data => data.name === equation);
     if (indexOfEquation !== -1) {
       console.log("This equation was already used before. Deleting trace.");
-      console.log(indexOfEquation);
-      console.log(this.graphData[indexOfEquation]);
       
       PlotlyJS.deleteTraces("plotlyChart", indexOfEquation);
 
@@ -551,7 +549,7 @@ export class GrapherComponent implements OnInit {
         this.math.bignumber(this.yWindowUpperString).toString()]};
     }
 
-    let trace: PlotlyJS.Data = this.getTrace(points);
+    var trace: Partial<PlotlyJS.PlotData> = this.getTrace(points);
 
     this.graphData.push(trace);
 
@@ -572,7 +570,7 @@ export class GrapherComponent implements OnInit {
   }
 
   // Takes in an array of points and splits it up into PlotlyJS data.
-  getTrace(points: Point[]): PlotlyJS.Data {
+  getTrace(points: Point[]): Partial<PlotlyJS.PlotData> {
     this.totalPointsUsed += points.length;
 
     if (this.graphType === "3D") {
@@ -591,7 +589,7 @@ export class GrapherComponent implements OnInit {
       // For here, since we sorted by xcoord above, splitPoints[0] would correspond to the line of points along x-axis.
       // Without splitting the array, PlotlyJS assumes everything is contained on one great big line and starts 
       // connecting points and forming surfaces together, often causing false surfaces in the output.
-      var trace: PlotlyJS.Data = {
+      var trace: Partial<PlotlyJS.PlotData> = {
         x: splitPoints.map(pointArray => pointArray.map(point => point.xcoord)),
         y: splitPoints.map(pointArray => pointArray.map(point => point.ycoord)),
         z: splitPoints.map(pointArray => pointArray.map(point => point.zcoord)),
@@ -601,7 +599,7 @@ export class GrapherComponent implements OnInit {
       };
     }
     else {
-      var trace: PlotlyJS.Data = {
+      var trace: Partial<PlotlyJS.PlotData> = {
         x: points.map(point => point.xcoord),
         y: points.map(point => point.ycoord),
         name: points[0].equation,

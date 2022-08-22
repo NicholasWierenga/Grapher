@@ -18,7 +18,7 @@ export class TestService {
   math: math.MathJsStatic = this.mathExtras.math;
   xStepDelta: BigNumber = this.math.bignumber("-1");
   yStepDelta: BigNumber = this.math.bignumber("-1");
-  graphData: PlotlyJS.Data[] = [];
+  graphData: Partial<PlotlyJS.PlotData>[] = [];
   graphType: string = "";
   newPointsFoundCount: number = -1;
   savedPointsFoundCount: number = -1;
