@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { create, all, BigNumber, MathJsStatic } from 'mathjs';
+import { BigNumber } from 'mathjs';
 import * as PlotlyJS from 'plotly.js-dist-min';
 import { MathExtrasService } from './math-extras.service';
 import { Point } from './point';
@@ -15,7 +15,7 @@ export class TestService {
   yWindowUpperString!: string;
   xStepsString!: string;
   yStepsString!: string;
-  math: MathJsStatic = this.mathExtras.math;
+  math: math.MathJsStatic = this.mathExtras.math;
   xStepDelta: BigNumber = this.math.bignumber("-1");
   yStepDelta: BigNumber = this.math.bignumber("-1");
   graphData: PlotlyJS.Data[] = [];

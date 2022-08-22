@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { TestService } from '../test.service';
 import { GraphService } from '../graph.service';
 import { Point } from '../point';
-import { create, all, BigNumber } from 'mathjs';
+import { BigNumber } from 'mathjs';
 import * as PlotlyJS from 'plotly.js-dist-min';
 import { MathExtrasService } from '../math-extras.service';
 
@@ -31,47 +31,13 @@ export class GrapherComponent implements OnInit {
   savedPointsFoundCount: number = 0;
   totalPointsUsed: number = 0;
   math: math.MathJsStatic = this.mathExtras.math;
-  badEquation!: boolean 
-  badEquationTooManyVariables!: boolean
-  badXLower!: boolean
-  badXUpper!: boolean
-  badYLower!: boolean
-  badYUpper!: boolean
-  badXSteps!: boolean
-  badYSteps!: boolean
-  badXWindow!: boolean
-  badYWindow!: boolean
-  badXStepsIsNegative!: boolean;
-  badYStepsIsNegative!: boolean;
-  badXStepsIsDecimal!: boolean;
-  badYStepsIsDecimal!: boolean;
   
   constructor(private graphService: GraphService, private mathExtras: MathExtrasService,
     private testService: TestService) { }
 
-  // TODO: Move a lot of the above booleans
   // This checks if the data the user is sending can be used. If not, error messages will be shown on the front-end.
   validateData(): void {
     let noInputIssues = true;
-    this.badEquation = false;
-    this.badEquationTooManyVariables = false;
-    this.badXLower = false;
-    this.badXUpper = false;
-    this.badYLower = false;
-    this.badYUpper = false;
-    this.badXSteps = false;
-    this.badYSteps = false;
-    this.badXWindow = false;
-    this.badYWindow = false;
-    this.badXStepsIsNegative = false;
-    this.badYStepsIsNegative = false;
-    this.badXStepsIsDecimal = false;
-    this.badYStepsIsDecimal = false;
-    let expression: string = "";
-    let variables: string = "";
-    let onlyVariables: Set<string> = new Set([]);
-
-
     this.xStepsString = this.xStepsString || "100";
     this.yStepsString = this.yStepsString || "100";
     this.xWindowLowerString = this.xWindowLowerString || "-10";
@@ -82,12 +48,14 @@ export class GrapherComponent implements OnInit {
     // that tacks on "y = " or "z = " and then return an equation instead.
     // Then we can check if what the current equation has a either of those above strings
     // to decide if we should use default y-windows or keep it empty.
+
     if (this.equation.trim().length === 0) {
-      this.badEquation = true;
+      document.getElementById("badEquation")!.style.display = "block";
+
       noInputIssues = false;
     }
-
     else {
+      document.getElementById("badEquation")!.style.display = "none";
     }
 
     // Later in the program we convert to bignumber these, so we want to make sure users
@@ -97,9 +65,12 @@ export class GrapherComponent implements OnInit {
 
       this.xWindowUpperString = this.xWindowUpperString || this.math.bignumber(this.xWindowLowerString)
       .plus(this.math.bignumber("20")).toString();
+
+      document.getElementById("badXLower")!.style.display = "none";
     }
     catch {
-      this.badXLower = true;
+      document.getElementById("badXLower")!.style.display = "block";
+
       noInputIssues = false;
     }
 
@@ -108,85 +79,120 @@ export class GrapherComponent implements OnInit {
 
       this.yWindowUpperString = this.yWindowUpperString || this.math.bignumber(this.yWindowLowerString)
       .plus(this.math.bignumber("20")).toString();
+
+      document.getElementById("badYLower")!.style.display = "none";
     }
     catch {
-      this.badYLower = true;
+      document.getElementById("badYLower")!.style.display = "block";
+
       noInputIssues = false;
     }
 
     try {
       this.math.bignumber(this.xWindowUpperString);
+      document.getElementById("badXUpper")!.style.display = "none";
     }
     catch {
-      this.badXUpper = true;
+      document.getElementById("badXUpper")!.style.display = "block";
+
       noInputIssues = false;
     }
 
     try {
       this.math.bignumber(this.yWindowUpperString);
+
+      document.getElementById("badYUpper")!.style.display = "none";
     }
     catch {
-      this.badYUpper = true;
+      document.getElementById("badYUpper")!.style.display = "block";
+
       noInputIssues = false;
     }
 
-    if (!this.badXUpper && !this.badXLower) {
+    // Checks if we have x windows that can be used then checks if lower is less than upper.
+    if (document.getElementById("badXLower")!.style.display === "none" 
+     && document.getElementById("badXUpper")!.style.display === "none") {
       if (this.mathExtras.isLessThanOrEqualTo(this.math.bignumber(this.xWindowUpperString)
-          , this.math.bignumber(this.xWindowLowerString), this.math.bignumber("1e-32"))) {
-        this.badXWindow = true;
+        , this.math.bignumber(this.xWindowLowerString), this.math.bignumber("1e-32"))) {
+        document.getElementById("badXWindow")!.style.display = "block";
+
         noInputIssues = false;
+      }
+      else {
+        document.getElementById("badXWindow")!.style.display = "none";
       }
     }
 
-    if (!this.badYUpper && !this.badYLower) {
+    if (document.getElementById("badYLower")!.style.display === "none" 
+    && document.getElementById("badYUpper")!.style.display === "none") {
       if (this.mathExtras.isLessThanOrEqualTo(this.math.bignumber(this.yWindowUpperString)
-          , this.math.bignumber(this.yWindowLowerString), this.math.bignumber("1e-32"))) {
-        this.badYWindow = true;
+        , this.math.bignumber(this.yWindowLowerString), this.math.bignumber("1e-32"))) {
+        document.getElementById("badYWindow")!.style.display = "block";
+
         noInputIssues = false;
-      } 
+      }
+      else {
+        document.getElementById("badYWindow")!.style.display = "none";
+      }
     }
 
     try {
       this.math.bignumber(this.xStepsString);
+
+      document.getElementById("badXSteps")!.style.display = "none";
     }
     catch {
-      this.badXSteps = true;
+      document.getElementById("badXSteps")!.style.display = "block";
+
       noInputIssues = false;
     }
 
     // These require converting the string into a bignumber, which is why we have the if statement.
     // This if statement can only ever be passed if the above try did not fail.
-    if (!this.badXSteps) {
+    if (document.getElementById("badXSteps")!.style.display === "none") {
       if (this.mathExtras.isLessThan(this.math.bignumber(this.xStepsString), this.math.bignumber("0"))) {
-        this.badXStepsIsNegative = true;
+        document.getElementById("badXStepsIsNegative")!.style.display = "block";
         noInputIssues = false;
+      }
+      else {
+        document.getElementById("badXStepsIsNegative")!.style.display = "none";
       }
 
       if (this.math.round(this.math.bignumber(this.xStepsString)).toString() 
           !== this.math.bignumber(this.xStepsString).toString()) {
-        this.badXStepsIsDecimal = true;
+        document.getElementById("badXStepsIsDecimal")!.style.display = "block";
         noInputIssues = false;
+      }
+      else {
+        document.getElementById("badXStepsIsDecimal")!.style.display = "none";
       }
     }
 
     try {
       this.math.bignumber(this.yStepsString);
+      document.getElementById("badYSteps")!.style.display = "none";
     }
     catch {
-      this.badYSteps = true;
+      document.getElementById("badYSteps")!.style.display = "block";
       noInputIssues = false;
     }
 
-    if (!this.badYSteps) {
+    if (document.getElementById("badYSteps")!.style.display === "none") {
       if (this.mathExtras.isLessThan(this.math.bignumber(this.yStepsString), this.math.bignumber("0"))) {
-        this.badYStepsIsNegative = true;
+        document.getElementById("badYStepsIsNegative")!.style.display = "block";
         noInputIssues = false;
+      }
+      else {
+        document.getElementById("badYStepsIsNegative")!.style.display = "none";
       }
 
       if (this.math.round(this.math.bignumber(this.yStepsString)).toString() 
-          !== this.math.bignumber(this.yStepsString).toString()) {
-        this.badYStepsIsDecimal = true;
+      !== this.math.bignumber(this.yStepsString).toString()) {
+        document.getElementById("badYStepsIsDecimal")!.style.display = "block";
         noInputIssues = false;
+      }
+      else {
+        document.getElementById("badYStepsIsDecimal")!.style.display = "none";
       }
     }
     
@@ -200,8 +206,11 @@ export class GrapherComponent implements OnInit {
       let onlyVariables: Set<string> = new Set(variables.replace(/\s+/g, ""));
 
       if (onlyVariables.size > 2) {
-        this.badEquationTooManyVariables = true;
+        document.getElementById("badEquationTooManyVariables")!.style.display = "block";
         return;
+      }
+      else {
+        document.getElementById("badEquationTooManyVariables")!.style.display = "none";
       }
 
       // Checks if expression has valid variables then fixes them
@@ -223,10 +232,13 @@ export class GrapherComponent implements OnInit {
   redoTraces(): void {
     let amountOfRedos: number = 0;
     let startingEquation: string = this.equation;
-    let beginningData: PlotlyJS.Data[] = this.graphData;
+    let startData = this.graphData;
 
+    // TODO: Currently, switching windows doesn't update all data to correct values.
+    // Try swapping startData out for graphData and use the index to update values instead of
+    // creating a copy of the traces.
     // Looks through previous traces, redoing whatever should be according to graphType and window settings.
-    beginningData.forEach(data => {
+    startData.forEach(data => {
       // The .split(",") is for 3D data. Those return an array filled with the same number, but we only want one.
       let oldLowerXString: string = data.x![0]!.toString().split(",")[0];
       let oldUpperXString: string = data.x![data.x!.length - 1]!.toString().split(",")[0];
@@ -238,8 +250,8 @@ export class GrapherComponent implements OnInit {
 
       // We redo any traces found to have different window settings.
       if (((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString) && data.name!.includes("y = "))
-       || ((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString
-         || oldLowerYString !== this.yWindowLowerString || oldUpperYString !== this.yWindowUpperString) && data.name!.includes("z = "))) {
+       || ((oldLowerYString !== this.yWindowLowerString || oldUpperYString !== this.yWindowUpperString) && data.name!.includes("z = ")
+         || oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString)) {
         this.findTrace(data.name!);
 
         amountOfRedos++;
@@ -248,7 +260,7 @@ export class GrapherComponent implements OnInit {
 
     console.log(`Amount of redone equations: ${amountOfRedos}.`);
 
-    this.equation = startingEquation.split("= ")[1];
+    this.equation = startingEquation.split("= ")[1]; // Sets the user equation back to something simple.
   }
 
   findTrace(equation: string): void {
@@ -284,13 +296,17 @@ export class GrapherComponent implements OnInit {
     
     let indexOfEquation: number = this.graphData.findIndex(data => data.name === equation);
     if (indexOfEquation !== -1) {
-      console.log("This equation was already used before. Deleting.");
+      console.log("This equation was already used before. Deleting trace.");
+      console.log(indexOfEquation);
+      console.log(this.graphData[indexOfEquation]);
+      
       PlotlyJS.deleteTraces("plotlyChart", indexOfEquation);
 
+      // This removes the amount of points in the trace from totalPointsUsed. They're re-added later on.
       if (this.graphType === "2D") {
         this.totalPointsUsed -= this.graphData[indexOfEquation].x!.length;
       }
-      else {
+      else if (this.graphType === "3D") {
         this.totalPointsUsed -= this.graphData[indexOfEquation].x!.length * this.graphData[indexOfEquation].y!.length;
       }
 
@@ -477,6 +493,9 @@ export class GrapherComponent implements OnInit {
         if (newPoints.length !== 0) {
           console.log(`${newPoints.length} still need to be sent.`);
         }
+        else {
+          console.log(`All points sent.`);
+        }
 
         packetNumber++;
       }
@@ -628,15 +647,6 @@ export class GrapherComponent implements OnInit {
 // This is an area for TODO's that would be nice to implement, but won't prevent the program from functioning,
 // so they're not terribly important.
 
-// TODO: It'd be cool to add to the DB after the user calculated a certain amount of new points
-// This would be for really computationally heavy tasks and so the user could terminate the program,
-// but all points but for a handful toward the end would still be found in the DB.
-// This allows for users to not have to finish the task all at once and keep 'chipping away' at a graph
-// until it is finished.
-// This would look like below
-// if (newPoints.length() >= 1000) then createPoints(newPoints) then newPoints = []
-// This isn't complicated to do, but should be saved for when the program is functional so it doesn't interfere with testing.
-
 // TODO: A function like sin(x)+cos(x*(sin(x))) will work, but the functions sin(x)+cos(x(sin(x))) and sin(x)+cos(xsin(x)) won't
 // and I would like those to work also. MathJS can do .simplify() to get rid of redundant ()'s, but it would be nice to add something
 // into the program that identifies that xsin(x) means x*sin(x). This would probably look something like identifying that x is next
@@ -644,21 +654,11 @@ export class GrapherComponent implements OnInit {
 // searching through and spacing-out found trig functions, we give some other value like # and so we check if # is adjacent
 // x. If so, we simply put a * between them and then the program won't error out and cause the user to have to put the * themselves.
 
-// TODO: Implement some logic that replaces the need for the user to define how many steps to take. This would look like finding the
-// derivative of the inputted function and comparing the value of the derivative at the previous point and the current point. If
-// the difference between the too is too large, pick the point between the two and try again until the values are close enough. 
-
-// TODO: The equation that is listed above the graph for something like 1/3x displays as 0.3333333333333333333333x, which is obnoxious.
-
 // Maybe TODO: MathJS does not simplify expressions like tan(x)*cos(x) correctly. tan(x) = sin(x)/cos(x), so we should be able to
 // substitute that in for tan(x), then .simplify() with MathJS to cancel out the cos(x). This would also give the added benefit by
 // further simplifying down equations sent to the DB and cutting down the calculations, which would overall speed up the program
 // for someone using equations like tan(x)*cos(x). It would allow them to pull from the DB using sin(x), which is more likely to be
 // present than something like tan(x)*cos(x).
-
-// TODO: Error: <path> attribute transform: Expected number, "translate(5.49139131172038…". is an error that comes when zooming
-// extremely far into the graph. This only prints errors on the console, but the program doesn't stop running and nothing seems
-// to break as a result. Read up on it to decide if this is something that should be worried about.
 
 // TODO: If user does not have the Point table on the DB, then graphs cannot be shown due to and error. The program is meant 
 // to work with a DB, but it would be nice if the DB breaks that the program still runs.

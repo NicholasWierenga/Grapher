@@ -4,6 +4,8 @@
   >
     <div class="container">
       <a class="navbar-brand" [routerLink]="['/']">Grapher</a>
+      
+
       <button
         class="navbar-toggler"
         type="button"
@@ -28,6 +30,11 @@
             <a class="nav-link text-dark" [routerLink]="['/']">Home</a>
           </li>
         </ul>
+        <span id="theme">| Light theme &nbsp;</span>
+        <label class="switch">
+          <input type="checkbox" on-click="switchTheme()">
+          <span class="slider round"></span>
+        </label>
       </div>
     </div>
   </nav>

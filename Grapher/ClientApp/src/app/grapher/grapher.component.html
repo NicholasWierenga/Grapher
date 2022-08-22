@@ -3,71 +3,71 @@
 <div class="w3-card-4">
   <div class="w3-container w3-light-grey" style = "padding: 10px 10px 10px 10px;">
     <form (ngSubmit)="validateData()">
-      <span class="error" *ngIf="badEquation">
+      <span id="badEquation" class="error">
         You must enter an equation.
         <br>
       </span>
-      <span class="error" *ngIf="badEquationTooManyVariables">
+      <span id="badEquationTooManyVariables" class="error">
         There must be at most 2 variables.
         <br>
       </span>
       <input type="text" placeholder="Enter expression here" [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
       <br>
 
-      <span class="error" *ngIf="badXLower">
+      <span id="badXLower" class="error">
         Please enter a valid value for the lower x-window or leave blank.
         <br>
       </span>
-      <span class="error" *ngIf="badXUpper">
+      <span id="badXUpper" class="error">
         Please enter a valid value for the upper x-window or leave blank.
         <br>
       </span>
-      <span class="error" *ngIf="badXWindow">
+      <span id="badXWindow" class="error">
         The lower x-window should be less than the upper window.
         <br>
       </span>
       <input type="text" placeholder="Lower bound for x-axis" [(ngModel)]="xWindowLowerString"  [ngModelOptions]="{standalone: true}"/> -
       <input type="text" placeholder="Upper bound for x-axis" [(ngModel)]="xWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
       <br>
-      <span class="error" *ngIf="badXSteps">
+      <span id="badXSteps" class="error">
         Please enter a valid value for the amount of steps along the x-axis or leave blank.
         <br>
       </span>
-      <span class="error" *ngIf="badXStepsIsNegative">
+      <span id="badXStepsIsNegative" class="error">
         The step value cannot be negative.
         <br>
       </span>
-      <span class="error" *ngIf="badXStepsIsDecimal">
+      <span id="badXStepsIsDecimal" class="error">
         The step value cannot be a decimal.
         <br>
       </span>
       <input type="text" placeholder="Steps to take on x-axis" [(ngModel)]="xStepsString"  [ngModelOptions]="{standalone: true}"/>
       <br>
 
-      <span class="error" *ngIf="badYLower">
+      <span id="badYLower" class="error">
         Please enter a valid value for the lower y-window or leave blank.
         <br>
       </span>
-      <span class="error" *ngIf="badYUpper">
+      <span id="badYUpper" class="error">
         Please enter a valid value for the upper y-window or leave blank.
         <br>
       </span>
-      <span class="error" *ngIf="badYWindow">
+      <span id="badYWindow" class="error">
         The lower y-window should be less than the upper window.
         <br>
       </span>
       <input type="text" placeholder="Lower bound for y-axis" [(ngModel)]="yWindowLowerString"  [ngModelOptions]="{standalone: true}"/> - 
       <input type="text" placeholder="Upper bound for y-axis" [(ngModel)]="yWindowUpperString"  [ngModelOptions]="{standalone: true}"/>
       <br>
-      <span class="error" *ngIf="badYSteps">
+      <span id="badYSteps" class="error">
         Please enter a valid value for the amount of steps along the y-axis or leave blank.
         <br>
       </span>
-      <span class="error" *ngIf="badYStepsIsNegative">
+      <span id="badYStepsIsNegative" class="error">
         The step value cannot be negative.
         <br>
       </span>
-      <span class="error" *ngIf="badYStepsIsDecimal">
+      <span id="badYStepsIsDecimal" class="error">
         The step value cannot be a decimal.
         <br>
       </span>
@@ -76,7 +76,7 @@
 
       <input class="clickables" type="submit">
 
-      <button type="button" class="clickables" (click)="purgeGraph()">Clear All</button>
+      <input class="clickables" type="button" (click)="purgeGraph()" value="Clear All">
     </form>
   </div>
 
