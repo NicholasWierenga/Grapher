@@ -9,7 +9,7 @@ graph once more.
 
 Below are the SQL commands that create the needed database, table, and outputs the database connection string to be used in line 27 in GrapherContext.cs.
 Technically, all of these could be done through DBContext commands, but creating a database, connecting to it, then finding and using the user's connection
-string without telling them feels malwarey, so user's will be the ones to do that.
+string without telling them feels malwarey, so users will be the ones to do that.
 
 CREATE DATABASE Grapher;
 
