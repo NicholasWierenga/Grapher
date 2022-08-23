@@ -7,25 +7,13 @@ Additionally, users are able to change graphing parameters for an equation and t
 parameters. Changing the windows of a graph or the amount of steps taken won't mean the user necessarily needs to calculate the whole
 graph once more.
 
-Below are the SQL commands that create the needed database, table, and outputs the database connection string to be used in line 26 in GrapherContext.cs.
+Below are the SQL commands that create the needed database, table, and outputs the database connection string to be used in line 27 in GrapherContext.cs.
 
 CREATE DATABASE Grapher;
 
 GO
 
 USE Grapher;
-
-GO
-
--- Creates our table
-
-CREATE TABLE Point ( <br />
-    id INTEGER NOT NULL IDENTITY(1, 1) PRIMARY KEY, <br />
-    equation NVARCHAR(80) NOT NULL, <br />
-    xcoord NVARCHAR(80) NOT NULL, <br />
-    ycoord NVARCHAR(80) NOT NULL, <br />
-    zcoord NVARCHAR(80) <br />
-)
 
 GO
 
@@ -42,4 +30,4 @@ select <br />
     end <br />
     as ConnectionString <br />
 from sys.server_principals <br />
-where name = suser_name()
+where name = suser_name();

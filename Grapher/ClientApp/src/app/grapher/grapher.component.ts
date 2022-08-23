@@ -45,7 +45,7 @@ export class GrapherComponent implements OnInit {
     // TODO: This sets the y-windows for 2D as well, which can cut off parts of graph.
     // The default behavior empty-valued 2D equations should be to let PlotlyJS decide y-windowing.
     // A way to do this could be to change one of the functions handling variables to something
-    // that tacks on "y = " or "z = " and then return an equation instead.
+    // that tacks on "y=" or "z=" and then return an equation instead.
     // Then we can check if what the current equation has a either of those above strings
     // to decide if we should use default y-windows or keep it empty.
 
@@ -249,8 +249,8 @@ export class GrapherComponent implements OnInit {
       let oldUpperYString: string = data.y![data.y!.length - 1]!.toString().split(",")[0];
 
       // We redo any traces found to have different window settings.
-      if (((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString) && data.name!.includes("y = "))
-       || ((oldLowerYString !== this.yWindowLowerString || oldUpperYString !== this.yWindowUpperString) && data.name!.includes("z = ")
+      if (((oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString) && data.name!.includes("y="))
+       || ((oldLowerYString !== this.yWindowLowerString || oldUpperYString !== this.yWindowUpperString) && data.name!.includes("z=")
          || oldLowerXString !== this.xWindowLowerString || oldUpperXString !== this.xWindowUpperString)) {
         this.findTrace(data.name!);
 
@@ -260,7 +260,7 @@ export class GrapherComponent implements OnInit {
 
     console.log(`Amount of redone equations: ${amountOfRedos}.`);
 
-    this.equation = startingEquation.split("= ")[1]; // Sets the user equation back to something simple.
+    this.equation = startingEquation.split("=")[1]; // Sets the user equation back to something simple.
   }
 
   findTrace(equation: string): void {
@@ -273,10 +273,10 @@ export class GrapherComponent implements OnInit {
     this.checkEquation(equation);
 
     // This graphs a constant-value function. Since these are very simple, they're calculated each time and not saved.
-    if (equation.match(/[\d\.]+/)?.toString() === equation.split("= ")[1]) {
+    if (equation.match(/[\d\.]+/)?.toString() === equation.split("=")[1]) {
       let points: Point[] = this.getNewPoints(equation, []);
 
-      this.getGraph(points);
+      this.getGraph(equation, points);
     }
     else {
       this.getAllPoints(equation);
@@ -383,10 +383,10 @@ export class GrapherComponent implements OnInit {
     expression = this.math.simplify(expression).toString().replace(/\s+/g, "");
     
     if (graphType === "2D") {
-      return `y = ${expression}`;
+      return `y=${expression}`;
     }
     else {
-      return `z = ${expression}`;
+      return `z=${expression}`;
     }
   }
 
@@ -401,7 +401,7 @@ export class GrapherComponent implements OnInit {
       
       pointsToGraph = this.getNewPoints(equation, pointsToGraph);
 
-      this.getGraph(pointsToGraph);
+      this.getGraph(equation, pointsToGraph);
     });
   }
 
@@ -438,7 +438,7 @@ export class GrapherComponent implements OnInit {
   }
 
   // This takes and has sorted the points passed to it then calculates unknown points. Calculated points are then saved in the DB.
-  getNewPoints(equationToUse: string, knownPoints: Point[]): Point[] {
+  getNewPoints(equation: string, knownPoints: Point[]): Point[] {
     let newPoints: Point[] = [];
     let currXVal!: math.BigNumber;
     let currYVal!: math.BigNumber;
@@ -453,15 +453,15 @@ export class GrapherComponent implements OnInit {
       currXVal = this.math.bignumber(this.xWindowLowerString).add(this.xStepDelta.mul(index % (parseInt(this.yStepsString!) + 1)));
       
       if (this.graphType === "2D") {
-        sortedPoints[index] = {id: undefined!, equation: equationToUse, xcoord: currXVal.toString(),
-          ycoord: this.math.evaluate(equationToUse, {x: currXVal}).toString(), zcoord: null};
+        sortedPoints[index] = {xcoord: currXVal.toString(), ycoord: this.math.evaluate(equation, {x: currXVal}).toString()
+          , zcoord: null};
       }
       else if (this.graphType === "3D") {
         currYVal = this.math.bignumber(this.yWindowLowerString).add(this.yStepDelta
           .mul(this.math.floor(index / (parseInt(this.yStepsString!) + 1))));
 
-        sortedPoints[index] = {id: undefined!, equation: equationToUse, xcoord: currXVal.toString(),
-          ycoord: currYVal.toString(), zcoord: this.math.evaluate(equationToUse, {x: currXVal, y: currYVal}).toString()};
+        sortedPoints[index] = {xcoord: currXVal.toString(), ycoord: currYVal.toString()
+          , zcoord: this.math.evaluate(equation, {x: currXVal, y: currYVal}).toString()};
       }
 
       newPoints.push(sortedPoints[index]);
@@ -470,13 +470,13 @@ export class GrapherComponent implements OnInit {
     this.newPointsFoundCount += newPoints.length;
 
     // We don't want to save constant functions to the DB. They are simple enough to calculate every time.
-    if (equationToUse.match(/[\d\.]+/)?.toString() !== equationToUse.split("= ")[1] && newPoints.length !== 0) {
+    if (equation.match(/[\d\.]+/)?.toString() !== equation.split("=")[1] && newPoints.length !== 0) {
       let packetNumber: number = 1;
-      let maxPacketSize: number = 10000;
+      let maxPacketSize: number = 1000;
       let amountToSend: number = newPoints.length % maxPacketSize;
-      let packetAmount: number = this.math.floor(newPoints.length / maxPacketSize) + 1;
+      let packetAmount: number = this.math.ceil(newPoints.length / maxPacketSize);
 
-      // Sometimes newPoints can be very large and can't be sent in one go. It is broken up here to avoid that problem.
+      // We insert using an INSERT VALUES statement on the backend, so we send in packets of 1000 points.
       while (newPoints.length !== 0) {
         if (newPoints.length % maxPacketSize === 0) {
           amountToSend = maxPacketSize;
@@ -485,9 +485,9 @@ export class GrapherComponent implements OnInit {
           amountToSend %= maxPacketSize;
         }
 
-        this.graphService.createPoints(newPoints.splice(0, amountToSend)).subscribe();
+        this.graphService.createPoints(equation, newPoints.splice(0, amountToSend)).subscribe();
         
-        console.log(`Sending packet ${packetNumber}/${packetAmount} with ${amountToSend} points.`);
+        console.log(`Sending packet ${packetNumber} of ${packetAmount} with ${amountToSend} points.`);
         if (newPoints.length !== 0) {
           console.log(`${newPoints.length} still need to be sent.`);
         }
@@ -517,14 +517,14 @@ export class GrapherComponent implements OnInit {
 
     knownPoints.forEach((point: Point) => {
       let index: number = parseInt(this.math.round(this.math.bignumber(point.xcoord).minus(
-      this.math.bignumber(this.xWindowLowerString)).dividedBy(this.math.bignumber(this.xStepDelta))).toString());
+        this.math.bignumber(this.xWindowLowerString)).dividedBy(this.math.bignumber(this.xStepDelta))).toString());
 
       // The program handles 3D traces by calculating a line of points ascending the x-axis before taking a step up y-axis.
       // This means that we can find which line on the y-axis the point is on by checking how many steps on the y it's done.
       // In short: The if below finds what line the point is on, the let above finds position on the point's line it is on.
       if (this.graphType === "3D") {
         index += parseInt(this.math.round(this.math.bignumber(point.ycoord).minus(this.math.bignumber(this.yWindowLowerString))
-        .dividedBy(this.yStepDelta).mul(this.math.bignumber(parseInt(this.xStepsString) + 1))).toString());
+          .dividedBy(this.yStepDelta).mul(this.math.bignumber(parseInt(this.xStepsString) + 1))).toString());
       }
 
       sortedPoints[index] = point;
@@ -538,7 +538,7 @@ export class GrapherComponent implements OnInit {
   }
 
   // TODO: There's an issue when requesting too many points from the program. It's an ArrayBuffer error.
-  getGraph(points: Point[]): void {
+  getGraph(equation: string, points: Point[]): void {
     let layout: Partial<PlotlyJS.Layout> = {
       xaxis: {range: [this.math.bignumber(this.xWindowLowerString).toString(), 
         this.math.bignumber(this.xWindowUpperString).toString()]}
@@ -549,7 +549,7 @@ export class GrapherComponent implements OnInit {
         this.math.bignumber(this.yWindowUpperString).toString()]};
     }
 
-    var trace: Partial<PlotlyJS.PlotData> = this.getTrace(points);
+    var trace: Partial<PlotlyJS.PlotData> = this.getTrace(equation, points);
 
     this.graphData.push(trace);
 
@@ -570,7 +570,7 @@ export class GrapherComponent implements OnInit {
   }
 
   // Takes in an array of points and splits it up into PlotlyJS data.
-  getTrace(points: Point[]): Partial<PlotlyJS.PlotData> {
+  getTrace(equation: string, points: Point[]): Partial<PlotlyJS.PlotData> {
     this.totalPointsUsed += points.length;
 
     if (this.graphType === "3D") {
@@ -593,7 +593,7 @@ export class GrapherComponent implements OnInit {
         x: splitPoints.map(pointArray => pointArray.map(point => point.xcoord)),
         y: splitPoints.map(pointArray => pointArray.map(point => point.ycoord)),
         z: splitPoints.map(pointArray => pointArray.map(point => point.zcoord)),
-        name: points[0].equation,
+        name: equation,
         type: "surface",
         hovertemplate: `(%{x},%{y},%{z})` // %{x} is what tells PlotlyJS to display the xcoord for what point the cursor is on.
       };
@@ -602,7 +602,7 @@ export class GrapherComponent implements OnInit {
       var trace: Partial<PlotlyJS.PlotData> = {
         x: points.map(point => point.xcoord),
         y: points.map(point => point.ycoord),
-        name: points[0].equation,
+        name: equation,
         type: "scatter",
         hovertemplate: `(%{x},%{y})`
       };

@@ -19,11 +19,14 @@ export class GraphService {
   }
 
   getPoints(equation: string): Observable<Point[]> {
-    equation = equation.replace("/", "%2F"); // equations with / mess with the URL. %2F is the code for /.
+    equation = equation.replace(/\/+/g, "%2F"); // Equations with / mess with the URL and cause errors. %2F is code for /.
+
     return this.http.get<Point[]>(this.urlRoot + `grapher/points/${equation}`);
   }
 
-  createPoints(pointsToAdd: Point[]): Observable<Point[]> {
-    return this.http.post<Point[]>(this.urlRoot + "grapher/addPoints", pointsToAdd, this.requestOptions);
+  createPoints(equation: string, pointsToAdd: Point[]): Observable<Point[]> {
+    equation = equation.replace(/\/+/g, "%2F");
+
+    return this.http.post<Point[]>(this.urlRoot + `grapher/addPoints/${equation}`, pointsToAdd, this.requestOptions);
   }
 }

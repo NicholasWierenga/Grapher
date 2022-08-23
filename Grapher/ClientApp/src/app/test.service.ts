@@ -138,12 +138,12 @@ export class TestService {
       }
     }
 
-    if (!equation.includes("y = ") && this.graphType === "2D") {
+    if (!equation.includes("y=") && this.graphType === "2D") {
       console.log("\nThere was an error. This is not an equation.");
       console.log(`The equation that was used: ${equation}.`);
     }
 
-    if (!equation.includes("z = ") && this.graphType === "3D") {
+    if (!equation.includes("z=") && this.graphType === "3D") {
       console.log("\nThere was an error. This is not an equation.");
       console.log(`The equation that was used: ${equation}.`);
     }

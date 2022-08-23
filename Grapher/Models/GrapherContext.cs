@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Grapher.Models
 {
@@ -26,35 +27,5 @@ namespace Grapher.Models
                 optionsBuilder.UseSqlServer("data source=MSI\\SQLEXPRESS;initial catalog=Grapher;trusted_connection=true");
             }
         }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Point>(entity =>
-            {
-                entity.ToTable("Point");
-
-                entity.Property(e => e.Id).HasColumnName("id");
-
-                entity.Property(e => e.Equation)
-                    .HasMaxLength(80)
-                    .HasColumnName("equation");
-
-                entity.Property(e => e.Xcoord)
-                    .HasMaxLength(80)
-                    .HasColumnName("xcoord");
-
-                entity.Property(e => e.Ycoord)
-                    .HasMaxLength(80)
-                    .HasColumnName("ycoord");
-
-                entity.Property(e => e.Zcoord)
-                    .HasMaxLength(80)
-                    .HasColumnName("zcoord");
-            });
-
-            OnModelCreatingPartial(modelBuilder);
-        }
-
-        partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
     }
 }
