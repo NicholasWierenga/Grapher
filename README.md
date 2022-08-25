@@ -7,7 +7,7 @@ Additionally, users are able to change graphing parameters for an equation and t
 parameters. Changing the windows of a graph or the amount of steps taken won't mean the user necessarily needs to calculate the whole
 graph once more.
 
-Below are the SQL commands that create the needed database, table, and outputs the database connection string to be used in line 27 in GrapherContext.cs.
+Below are the SQL commands that create the needed database, table, and outputs the database connection string to be used in line 26 in GrapherContext.cs.
 Technically, all of these could be done through DBContext commands, but creating a database, connecting to it, then finding and using the user's connection
 string without telling them feels malwarey, so users will be the ones to do that.
 
