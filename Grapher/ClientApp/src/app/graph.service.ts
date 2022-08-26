@@ -29,4 +29,12 @@ export class GraphService {
 
     return this.http.post<Point[]>(this.urlRoot + `grapher/addPoints/${equation}`, pointsToAdd, this.requestOptions);
   }
+
+  clearPoints(equation: string): Observable<void> {
+    return this.http.get<void>(this.urlRoot + `grapher/clearPoints/${equation}`);
+  }
+
+  storedPoints(equation: string): Observable<Point[]> {
+    return this.http.get<Point[]>(this.urlRoot + `grapher/countPoints/${equation}`, this.requestOptions);
+  }
 }

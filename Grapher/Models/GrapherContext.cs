@@ -15,9 +15,7 @@ namespace Grapher.Models
         public GrapherContext(DbContextOptions<GrapherContext> options) : base(options)
         {
         }
-
         public virtual DbSet<Point> Points { get; set; } = null!;
-
         public virtual DbSet<EquationData> Equations { get; set; } = null!;
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

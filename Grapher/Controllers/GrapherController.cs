@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Grapher.Controllers
 {
+    // TODO: Instead of doing 2 SELECT ... FROM statements to retrieve points, do 1 nested statement.
     [ApiController]
     [Route("[controller]")]
     public class GrapherController : Controller
@@ -19,7 +20,7 @@ namespace Grapher.Controllers
 
             if (tableName != "")
             {
-                return grapherDB.Set<Point>().FromSqlRaw($"SELECT xcoord, ycoord, zcoord FROM [{tableName}];")
+                return grapherDB.Set<Point>().FromSqlRaw($"SELECT * FROM [{tableName}];")
                     .AsSplitQuery().ToList();
             }
             // If tableName is an empty string, that means that there was no record in Equations for equation.
@@ -57,7 +58,7 @@ namespace Grapher.Controllers
             {
                 grapherDB.Database.ExecuteSqlRaw(
                     $"INSERT INTO Equations "
-                        + $"VALUES ('{equation}')"
+                  + $"VALUES ('{equation}')"
                 );
             }
             // If the try fails, that means there is no Equations table present, so we create Equations then redo the function.
@@ -77,8 +78,11 @@ namespace Grapher.Controllers
 
             try
             {
-                tableName = grapherDB.Set<EquationData>().FromSqlRaw($"SELECT * FROM Equations " +
-                    $"WHERE Equation = '{equation}'").AsNoTracking().AsSingleQuery().FirstOrDefault()
+                tableName = grapherDB.Set<EquationData>().FromSqlRaw(
+                    $"SELECT * " +
+                    $"FROM Equations " +
+                    $"WHERE Equation = '{equation}'"
+                    ).AsNoTracking().AsSingleQuery().FirstOrDefault()
                     .Table_Name.ToString();
             }
             catch { }
@@ -107,7 +111,7 @@ namespace Grapher.Controllers
 
             grapherDB.Database.ExecuteSqlRaw(
                 $"INSERT INTO [{tableName}] (xcoord, ycoord, zcoord) "
-                    + $"VALUES {pointsToInsert}"
+              + $"VALUES {pointsToInsert}"
             );
         }
 
@@ -117,10 +121,36 @@ namespace Grapher.Controllers
         {
             grapherDB.Database.ExecuteSqlRaw(
                 $"CREATE TABLE Equations ("
-                    + "Equation NVARCHAR(400) NOT NULL,"
-                    + "Table_Name INTEGER IDENTITY(1, 1),"
-                + ");"
+               + "Equation NVARCHAR(400) NOT NULL,"
+               + "Table_Name INTEGER IDENTITY(1, 1),"
+               + ");"
             );
+        }
+
+        [HttpGet("clearPoints/{equation}")]
+        public void ClearTable(string equation)
+        {
+            string tableName = FindTableName(equation);
+
+            grapherDB.Database.ExecuteSqlRaw($"DELETE FROM [{tableName}]");
+        }
+
+        [HttpGet("countPoints/{equation}")]
+        public List<Point> CountPoints(string equation)
+        {
+            string tableName = FindTableName(equation);
+
+            // TODO: Fix this. Call Count(*) instead of *. This was a quick way to implement this feature,
+            // but it will be removed soon.
+            try
+            {
+                return grapherDB.Set<Point>().FromSqlRaw($"SELECT * FROM [{tableName}];")
+                    .AsSplitQuery().ToList();
+            }
+            catch
+            {
+                return new List<Point>();
+            }
         }
     }
 }

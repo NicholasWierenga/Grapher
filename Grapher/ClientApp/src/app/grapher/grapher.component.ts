@@ -17,6 +17,7 @@ import { MathExtrasService } from '../math-extras.service';
 // The above issue also works for large decimal multiple of x.
 export class GrapherComponent implements OnInit {
   equation: string = "";
+  previousEquation: string = "";
   xWindowLowerString!: string;
   xWindowUpperString!: string;
   yWindowLowerString!: string;
@@ -30,6 +31,7 @@ export class GrapherComponent implements OnInit {
   newPointsFoundCount: number = 0;
   savedPointsFoundCount: number = 0;
   totalPointsUsed: number = 0;
+  pointsForThisEquation: number = -1;
   math: math.MathJsStatic = this.mathExtras.math;
   
   constructor(private graphService: GraphService, private mathExtras: MathExtrasService,
@@ -48,15 +50,6 @@ export class GrapherComponent implements OnInit {
     // that tacks on "y=" or "z=" and then return an equation instead.
     // Then we can check if what the current equation has a either of those above strings
     // to decide if we should use default y-windows or keep it empty.
-
-    if (this.equation.trim().length === 0) {
-      document.getElementById("badEquation")!.style.display = "block";
-
-      noInputIssues = false;
-    }
-    else {
-      document.getElementById("badEquation")!.style.display = "none";
-    }
 
     // Later in the program we convert to bignumber these, so we want to make sure users
     // aren't entering something that can't be converted.
@@ -195,37 +188,52 @@ export class GrapherComponent implements OnInit {
         document.getElementById("badYStepsIsDecimal")!.style.display = "none";
       }
     }
+
+    this.validateEquation(this.equation);
     
     if (noInputIssues) {
       this.newPointsFoundCount = 0;
       this.savedPointsFoundCount = 0;
-      // This takes the user's input, which MathJS allows to be an equation if they want, then records the 
-      // variables used. Later on, we fix the variables to be x and y if needed and make it into a valid equation.
-      let expression: string = this.math.simplify(this.equation.split("=")[this.equation.split("=").length - 1]).toString();
-      let variables: string = this.getVariables(expression);
-      let onlyVariables: Set<string> = new Set(variables.replace(/\s+/g, ""));
-
-      if (onlyVariables.size > 2) {
-        document.getElementById("badEquationTooManyVariables")!.style.display = "block";
-        return;
-      }
-      else {
-        document.getElementById("badEquationTooManyVariables")!.style.display = "none";
-      }
-
-      // Checks if expression has valid variables then fixes them
-      if ((onlyVariables.has("x") && onlyVariables.size === 1) || !(onlyVariables.has("x") && onlyVariables.has("y"))) { 
-        expression = this.fixExpressionVariables(expression, variables);
-      }
-
-      this.graphType = this.getGraphType(onlyVariables);
-      
-      this.equation = this.getEquation(expression, this.graphType);
 
       this.findTrace(this.equation);
       
       this.redoTraces();
     }
+  }
+
+  // Takes the user's equations and checks for errors and returns an equation that can be worked with.
+  validateEquation(equation: string): void {
+    if (this.equation.trim().length === 0) {
+      document.getElementById("badEquation")!.style.display = "block";
+
+      return;
+    }
+    else {
+      document.getElementById("badEquation")!.style.display = "none";
+    }
+
+    // This takes the user's input, which MathJS allows to be an equation if they want, then records the 
+    // variables used. Later on, we fix the variables to be x and y if needed and make it into a valid equation.
+    let expression: string = this.math.simplify(this.equation.split("=")[this.equation.split("=").length - 1]).toString();
+    let variables: string = this.getVariables(expression);
+    let onlyVariables: Set<string> = new Set(variables.replace(/\s+/g, ""));
+
+    if (onlyVariables.size > 2) {
+      document.getElementById("badEquationTooManyVariables")!.style.display = "block";
+      return;
+    }
+    else {
+      document.getElementById("badEquationTooManyVariables")!.style.display = "none";
+    }
+
+    // Checks if expression has valid variables then fixes them
+    if ((onlyVariables.has("x") && onlyVariables.size === 1) || !(onlyVariables.has("x") && onlyVariables.has("y"))) {
+      expression = this.fixExpressionVariables(expression, variables);
+    }
+
+    this.graphType = this.getGraphType(onlyVariables);
+
+    this.equation = this.getEquation(expression, this.graphType);
   }
 
   // Recalculates previously used equations at the new window settings and steps.
@@ -634,6 +642,30 @@ export class GrapherComponent implements OnInit {
     this.totalPointsUsed = 0;
     
     PlotlyJS.purge("plotlyChart");
+  }
+
+  clearPoints(): void {
+    this.validateEquation(this.equation);
+
+    this.graphService.clearPoints(this.equation).subscribe();
+
+    this.pointsForThisEquation = -1;
+
+    this.equation = this.equation.split("=")[1];
+  }
+
+  storedPoints(): void {
+    this.validateEquation(this.equation);
+
+    this.pointsForThisEquation = -1;
+
+    this.graphService.storedPoints(this.equation).subscribe((array) => {
+      this.pointsForThisEquation = array.length;
+    });
+
+    this.previousEquation = this.equation;
+
+    this.equation = this.equation.split("=")[1];
   }
 
   ngOnInit(): void {

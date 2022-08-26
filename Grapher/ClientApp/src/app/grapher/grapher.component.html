@@ -89,4 +89,41 @@
 
     <div id="plotlyChart" style="width:100%; height: 100%"></div>
   </div>
+
+  <!-- TODO: Put some <layer> on the forms below to cut down on placeholder size.-->
+  <div class="w3-container">
+    <form (ngSubmit)="clearPoints()">
+      <span id="badEquation" class="error">
+        You must enter an equation.
+        <br>
+      </span>
+      <span id="badEquationTooManyVariables" class="error">
+        There must be at most 2 variables.
+        <br>
+      </span>
+      <input type="text" class="clickables" placeholder="Enter equation to clear."
+             [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
+
+      <span *ngIf="this.pointsForThisEquation > -1">
+        Points found for {{this.previousEquation}}: {{this.pointsForThisEquation}}.
+      </span>
+      <input class="clickables" type="submit">
+    </form>
+
+    <!-- TODO: The errors never are displayed except for the ones way up top. -->
+    <form (ngSubmit)="storedPoints()">
+      <span id="badEquation" class="error">
+        You must enter an equation.
+        <br>
+      </span>
+      <span id="badEquationTooManyVariables" class="error">
+        There must be at most 2 variables.
+        <br>
+      </span>
+      <input type="text" class="clickables" placeholder="Find stored points for eq."
+             [(ngModel)]="equation"  [ngModelOptions]="{standalone: true}"/>
+
+      <input class="clickables" type="submit">
+    </form>
+  </div>
 </div>
