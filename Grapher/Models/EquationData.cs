@@ -7,5 +7,7 @@ namespace Grapher.Models
     {
         public string Equation { get; set; } = null!;
         public int Table_Name { get; set; }
+
+        public int Count { get; set; }
     }
 }

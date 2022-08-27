@@ -1,6 +1,7 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { EquationData } from './equationdata';
 import { Point } from './point';
 
 @Injectable({
@@ -30,11 +31,11 @@ export class GraphService {
     return this.http.post<Point[]>(this.urlRoot + `grapher/addPoints/${equation}`, pointsToAdd, this.requestOptions);
   }
 
-  clearPoints(equation: string): Observable<void> {
-    return this.http.get<void>(this.urlRoot + `grapher/clearPoints/${equation}`);
+  clearPoints(tableName: number): Observable<void> {
+    return this.http.get<void>(this.urlRoot + `grapher/clearPoints/${tableName}`);
   }
 
-  storedPoints(equation: string): Observable<Point[]> {
-    return this.http.get<Point[]>(this.urlRoot + `grapher/countPoints/${equation}`, this.requestOptions);
+  getEquationDatas(): Observable<EquationData[]> {
+    return this.http.get<EquationData[]>(this.urlRoot + `grapher/getDatas`, this.requestOptions);
   }
 }

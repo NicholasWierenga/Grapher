@@ -5,6 +5,7 @@ import { Point } from '../point';
 import { BigNumber } from 'mathjs';
 import * as PlotlyJS from 'plotly.js-dist-min';
 import { MathExtrasService } from '../math-extras.service';
+import { EquationData } from '../equationdata';
 
 @Component({
   selector: 'app-grapher',
@@ -17,7 +18,7 @@ import { MathExtrasService } from '../math-extras.service';
 // The above issue also works for large decimal multiple of x.
 export class GrapherComponent implements OnInit {
   equation: string = "";
-  previousEquation: string = "";
+  equationDatas!: EquationData[];
   xWindowLowerString!: string;
   xWindowUpperString!: string;
   yWindowLowerString!: string;
@@ -203,7 +204,7 @@ export class GrapherComponent implements OnInit {
 
   // Takes the user's equations and checks for errors and returns an equation that can be worked with.
   validateEquation(equation: string): void {
-    if (this.equation.trim().length === 0) {
+    if (equation.trim().length === 0) {
       document.getElementById("badEquation")!.style.display = "block";
 
       return;
@@ -214,7 +215,7 @@ export class GrapherComponent implements OnInit {
 
     // This takes the user's input, which MathJS allows to be an equation if they want, then records the 
     // variables used. Later on, we fix the variables to be x and y if needed and make it into a valid equation.
-    let expression: string = this.math.simplify(this.equation.split("=")[this.equation.split("=").length - 1]).toString();
+    let expression: string = this.math.simplify(equation.split("=")[equation.split("=").length - 1]).toString();
     let variables: string = this.getVariables(expression);
     let onlyVariables: Set<string> = new Set(variables.replace(/\s+/g, ""));
 
@@ -575,6 +576,10 @@ export class GrapherComponent implements OnInit {
     this.passDataToTestService();
 
     this.testService.checkForProblems(points, trace.name!);
+
+    // TODO: This is a temp fix to update equationData. 
+    // Soon there will be another call to the backend that retrieves the new equationData.
+    this.ngOnInit();
   }
 
   // Takes in an array of points and splits it up into PlotlyJS data.
@@ -644,33 +649,17 @@ export class GrapherComponent implements OnInit {
     PlotlyJS.purge("plotlyChart");
   }
 
-  clearPoints(): void {
-    this.validateEquation(this.equation);
-
-    this.graphService.clearPoints(this.equation).subscribe();
-
-    this.pointsForThisEquation = -1;
-
-    this.equation = this.equation.split("=")[1];
-  }
-
-  storedPoints(): void {
-    this.validateEquation(this.equation);
-
-    this.pointsForThisEquation = -1;
-
-    this.graphService.storedPoints(this.equation).subscribe((array) => {
-      this.pointsForThisEquation = array.length;
+  clearPoints(tableName: number): void {
+    this.graphService.clearPoints(tableName).subscribe(() => {
+      this.equationDatas[this.equationDatas.findIndex(data => data.table_Name === tableName)].count = 0
     });
-
-    this.previousEquation = this.equation;
-
-    this.equation = this.equation.split("=")[1];
   }
 
   ngOnInit(): void {
     // When the program loads, this tests the functions used to fix MathJS functions.
     this.testService.testMath();
+
+    this.graphService.getEquationDatas().subscribe(equationDatas => this.equationDatas = equationDatas);
   }
 }
 
