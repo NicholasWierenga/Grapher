@@ -32,6 +32,8 @@ export class GraphService {
   }
 
   clearPoints(equation: string): Observable<void> {
+    equation = equation.replace(/\/+/g, "%2F");
+
     return this.http.get<void>(this.urlRoot + `grapher/clearPoints/${equation}`);
   }
 

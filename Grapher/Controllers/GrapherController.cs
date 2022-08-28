@@ -123,7 +123,7 @@ namespace Grapher.Controllers
                 grapherDB.Database.ExecuteSqlRaw(
                         $"UPDATE [Equations] " +
                         $"SET [Count] = [Count] + {count}" +
-                        $"WHERE [Equation] = {equation}"
+                        $"WHERE [Equation] = '{equation}'"
                     );
             }
             else
@@ -133,7 +133,7 @@ namespace Grapher.Controllers
                 grapherDB.Database.ExecuteSqlRaw(
                         $"UPDATE [Equations] " +
                         $"SET [Count] = 0" +
-                        $"WHERE [Equation] = {equation}"
+                        $"WHERE [Equation] = '{equation}'"
                     );
             }
         }
@@ -169,10 +169,10 @@ namespace Grapher.Controllers
         public void ClearTable(string equation)
         {
             equation = equation.Replace("%2F", "/");
-            EquationData? data = equationData.Find(data => data.Equation == equation);
+            int tableName = equationData.Find(data => data.Equation == equation)!.Table_Name;
 
             grapherDB.Database.ExecuteSqlRaw(
-                    $"DELETE FROM [{data.Table_Name}]"
+                    $"DELETE FROM [{tableName}]"
                 );
 
             UpdateEquationData(equation, 0);
