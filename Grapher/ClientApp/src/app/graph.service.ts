@@ -31,8 +31,8 @@ export class GraphService {
     return this.http.post<Point[]>(this.urlRoot + `grapher/addPoints/${equation}`, pointsToAdd, this.requestOptions);
   }
 
-  clearPoints(tableName: number): Observable<void> {
-    return this.http.get<void>(this.urlRoot + `grapher/clearPoints/${tableName}`);
+  clearPoints(equation: string): Observable<void> {
+    return this.http.get<void>(this.urlRoot + `grapher/clearPoints/${equation}`);
   }
 
   getEquationDatas(): Observable<EquationData[]> {

@@ -343,7 +343,7 @@ export class GrapherComponent implements OnInit {
     let variables: string = expression.replace(/[0-9+\-*.(){}\[\]\/<>^]/g, " ");
     
     let toRemove: string[] = ["sinh", "cosh", "sech", "csch", "tanh", "coth",
-    "sin", "cos", "sec", "csc", "tan", "cot"];
+    "sin", "cos", "sec", "csc", "tan", "cot", "e"];
 
     toRemove.forEach(removedString => {
       while (variables.includes(removedString)) {
@@ -389,7 +389,7 @@ export class GrapherComponent implements OnInit {
 
   // Takes in an expression that is meant to have its variables fixed and uses graphType to determine what to set it equal to.
   getEquation(expression: string, graphType: string): string {
-    expression = this.math.simplify(expression).toString().replace(/\s+/g, "");
+    expression = this.math.simplify(expression, {}, { exactFractions: true }).toString().replace(/\s+/g, "");
     
     if (graphType === "2D") {
       return `y=${expression}`;
@@ -480,35 +480,44 @@ export class GrapherComponent implements OnInit {
 
     // We don't want to save constant functions to the DB. They are simple enough to calculate every time.
     if (equation.match(/[\d\.]+/)?.toString() !== equation.split("=")[1] && newPoints.length !== 0) {
-      let packetNumber: number = 1;
-      let maxPacketSize: number = 1000;
-      let amountToSend: number = newPoints.length % maxPacketSize;
-      let packetAmount: number = this.math.ceil(newPoints.length / maxPacketSize);
-
-      // We insert using an INSERT VALUES statement on the backend, so we send in packets of 1000 points.
-      while (newPoints.length !== 0) {
-        if (newPoints.length % maxPacketSize === 0) {
-          amountToSend = maxPacketSize;
-        }
-        else {
-          amountToSend %= maxPacketSize;
-        }
-
-        this.graphService.createPoints(equation, newPoints.splice(0, amountToSend)).subscribe();
-        
-        console.log(`Sending packet ${packetNumber} of ${packetAmount} with ${amountToSend} points.`);
-        if (newPoints.length !== 0) {
-          console.log(`${newPoints.length} still need to be sent.`);
-        }
-        else {
-          console.log(`All points sent.`);
-        }
-
-        packetNumber++;
+      if (this.equationDatas.findIndex(data => data.equation === equation) === -1) {
+        this.equationDatas.push({ equation: equation, table_Name: -1, count: 0 })
       }
+
+      this.addPoints(equation, newPoints, newPoints.length);
     }
 
     return sortedPoints;
+  }
+
+  addPoints(equation: string, pointsToAdd: Point[], totalPointCount: number, packetNumber?: number): void {
+    packetNumber = packetNumber ?? 1;
+    let maxPacketSize: number = 1000;
+    let amountToSend: number = pointsToAdd.length % maxPacketSize;
+    let packetAmount: number = this.math.ceil(totalPointCount / maxPacketSize);
+
+    // We insert using an INSERT VALUES statement on the backend, so we send in packets of 1000 points.
+    if (pointsToAdd.length % maxPacketSize === 0) {
+      amountToSend = maxPacketSize;
+    }
+    else {
+      amountToSend %= maxPacketSize;
+    }
+
+    this.graphService.createPoints(equation, pointsToAdd.splice(0, amountToSend)).subscribe(() => {
+      this.equationDatas.find(data => data.equation === equation)!.count += amountToSend;
+
+      console.log(`Sent packet ${packetNumber} of ${packetAmount} with ${amountToSend} points.`);
+
+      if (pointsToAdd.length > 0) {
+        console.log(`${pointsToAdd.length} still need to be sent.`);
+
+        this.addPoints(equation, pointsToAdd, totalPointCount, packetNumber! + 1);
+      }
+      else {
+        console.log(`All points have been sent.`);
+      }
+    });
   }
 
   // Sorts the points passed into a large unfilled array according to where the points should be based on steps.
@@ -576,10 +585,6 @@ export class GrapherComponent implements OnInit {
     this.passDataToTestService();
 
     this.testService.checkForProblems(points, trace.name!);
-
-    // TODO: This is a temp fix to update equationData. 
-    // Soon there will be another call to the backend that retrieves the new equationData.
-    this.ngOnInit();
   }
 
   // Takes in an array of points and splits it up into PlotlyJS data.
@@ -649,9 +654,9 @@ export class GrapherComponent implements OnInit {
     PlotlyJS.purge("plotlyChart");
   }
 
-  clearPoints(tableName: number): void {
-    this.graphService.clearPoints(tableName).subscribe(() => {
-      this.equationDatas[this.equationDatas.findIndex(data => data.table_Name === tableName)].count = 0
+  clearPoints(equation: string): void {
+    this.graphService.clearPoints(equation).subscribe(() => {
+      this.equationDatas[this.equationDatas.findIndex(data => data.equation === equation)].count = 0
     });
   }
 

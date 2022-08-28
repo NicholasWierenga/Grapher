@@ -12,20 +12,21 @@ namespace Grapher.Controllers
     [Route("[controller]")]
     public class GrapherController : Controller
     {
-        GrapherContext grapherDB = new();
-        List<EquationData> equationData = new List<EquationData>();
+        private static GrapherContext grapherDB = new();
+        private static List<EquationData> equationData = new();
 
         // Returns a list of points for a given equation.
         [HttpGet("points/{equation}")]
-        public List<Point> getPoints(string equation)
+        public List<Point> GetPoints(string equation)
         {
-            int tableName = FindTableName(equation);
             equation = equation.Replace("%2F", "/"); // %2F is URL encoding for /, so we swap it back here.
+            EquationData? data = equationData.Find(data => data.Equation == equation);
 
-            if (tableName != -1)
+            if (data != null)
             {
                 return grapherDB.Set<Point>().FromSqlRaw(
-                        $"SELECT * FROM [{tableName}];").ToList();
+                            $"SELECT * FROM [{data.Table_Name}]"
+                        ).ToList();
             }
             // If tableName is an empty string, that means that there was no record in Equations for equation.
             // We then insert the equation into Equations, find its tableName, then create that table as tableName.
@@ -33,11 +34,10 @@ namespace Grapher.Controllers
             {
                 InsertEquation(equation);
 
-                tableName = FindTableName(equation);
+                // InsertEquations adds a new element to the end of equationData.
+                data = equationData.Last();
 
-                CreateTable(tableName);
-
-                UpdateEquationData(equation, tableName);
+                CreateTable(data!.Table_Name);
 
                 return new List<Point>();
             }
@@ -49,11 +49,11 @@ namespace Grapher.Controllers
         public void CreateTable(int tableName)
         {
             grapherDB.Database.ExecuteSqlRaw(
-                $"CREATE TABLE [{tableName.ToString()}] ( "
+                $"CREATE TABLE [{tableName}] ( "
                     + "xcoord NVARCHAR(80) NOT NULL, "
                     + "ycoord NVARCHAR(80) NOT NULL, "
                     + "zcoord NVARCHAR(80), "
-                + " )"
+                + ")"
             );
         }
 
@@ -63,9 +63,15 @@ namespace Grapher.Controllers
             try
             {
                 grapherDB.Database.ExecuteSqlRaw(
-                    $"INSERT INTO Equations "
-                  + $"VALUES ('{equation}')"
+                    $"INSERT INTO Equations (Equation, Count)"
+                  + $"VALUES ('{equation}', 0)"
                 );
+
+                int tableName = grapherDB.Equations.FromSqlRaw(
+                        $"SELECT * FROM [Equations]"
+                    ).ToList().Last().Table_Name;
+
+                equationData.Add(new() { Equation = equation, Table_Name = tableName, Count = 0 });
             }
             // If the try fails, that means there is no Equations table present, so we create Equations then redo the function.
             catch
@@ -76,39 +82,12 @@ namespace Grapher.Controllers
             }
         }
 
-        public void UpdateEquationData(string equation, int tableName)
-        {
-            this.equationData.Add(new EquationData { Equation = equation, 
-                Table_Name = tableName, Count = 0});
-        }
-
-        // Looks through the Equations table for the equation. When that is found, it returns
-        // its corresponding tableName.
-        public int FindTableName(string equation)
-        {
-            int tableName = -1;
-
-            try
-            {
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-                tableName = grapherDB.Set<EquationData>().FromSqlRaw(
-                        $"SELECT *, 0 as Count " +
-                        $"FROM Equations " +
-                        $"WHERE Equation = '{equation}'"
-                    ).AsNoTracking().AsSingleQuery().FirstOrDefault().Table_Name;
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
-            }
-            catch { }
-
-            return tableName;
-        }
-
-        // TODO: Add this to the count for equationData.
         // Takes the equation, finds its table's name, then dumps the points in there.
         [HttpPost("addPoints/{equation}")]
         public void AddPoints(string equation, List<Point> calculatedPoints)
         {
-            int tableName = FindTableName(equation);
+            equation = equation.Replace("%2F", "/");
+            EquationData? data = equationData.Find(data => data.Equation == equation);
             string pointsToInsert = "";
 
             for (int i = 0; i < calculatedPoints.Count; i++)
@@ -126,9 +105,37 @@ namespace Grapher.Controllers
             }
 
             grapherDB.Database.ExecuteSqlRaw(
-                    $"INSERT INTO [{tableName.ToString()}] (xcoord, ycoord, zcoord) "
-                    + $"VALUES {pointsToInsert}"
+                    $"INSERT INTO [{data!.Table_Name}] (xcoord, ycoord, zcoord) "
+                  + $"VALUES {pointsToInsert}"
                 );
+
+            UpdateEquationData(data!.Equation, calculatedPoints.Count);
+        }
+
+        public void UpdateEquationData(string equation, int count)
+        {
+            int index = equationData.FindIndex(data => data.Equation == equation);
+
+            if ( count > 0 )
+            {
+                equationData[index].Count += count;
+
+                grapherDB.Database.ExecuteSqlRaw(
+                        $"UPDATE [Equations] " +
+                        $"SET [Count] = [Count] + {count}" +
+                        $"WHERE [Equation] = {equation}"
+                    );
+            }
+            else
+            {
+                equationData[index].Count = 0;
+
+                grapherDB.Database.ExecuteSqlRaw(
+                        $"UPDATE [Equations] " +
+                        $"SET [Count] = 0" +
+                        $"WHERE [Equation] = {equation}"
+                    );
+            }
         }
 
         // Creates the Equations table, which is the table used to store all equations used
@@ -137,44 +144,38 @@ namespace Grapher.Controllers
         {
             grapherDB.Database.ExecuteSqlRaw(
                     $"CREATE TABLE Equations ("
-                    + "Equation NVARCHAR(400) NOT NULL,"
-                    + "Table_Name INTEGER IDENTITY(1, 1),"
-                    + ");"
+                        + "Equation NVARCHAR(400) NOT NULL,"
+                        + "Table_Name INTEGER IDENTITY(1, 1) NOT NULL," 
+                        + "Count INTEGER NOT NULL"
+                    + ")"
                 );
         }
 
         [HttpGet("getDatas")]
         public List<EquationData> FindEquationData()
         {
-            List<EquationData> equationDatas = new List<EquationData>();
-
             try
             {
-                equationDatas = grapherDB.Equations.FromSqlRaw(
-                        $"SELECT *, 0 AS Count FROM Equations;"
+                equationData = grapherDB.Equations.FromSqlRaw(
+                        $"SELECT * FROM [Equations]"
                     ).ToList();
             }
-            catch 
-            {
-                return equationDatas;
-            }
+            catch { }
 
-            foreach (EquationData equationData in equationDatas)
-            {
-                equationData.Count = grapherDB.Equations.FromSqlRaw(
-                    $"SELECT '0' AS Equation, 0 AS Table_Name, COUNT(*) AS Count FROM [{equationData.Table_Name}]"
-                ).First().Count;
-            }
-
-            return equationDatas;
+            return equationData;
         }
 
-        [HttpGet("clearPoints/{tableName}")]
-        public void ClearTable(int tableName)
+        [HttpGet("clearPoints/{equation}")]
+        public void ClearTable(string equation)
         {
+            equation = equation.Replace("%2F", "/");
+            EquationData? data = equationData.Find(data => data.Equation == equation);
+
             grapherDB.Database.ExecuteSqlRaw(
-                    $"DELETE FROM [{tableName.ToString()}];"
+                    $"DELETE FROM [{data.Table_Name}]"
                 );
+
+            UpdateEquationData(equation, 0);
         }
     }
 }
