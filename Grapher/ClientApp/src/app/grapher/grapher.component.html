@@ -81,7 +81,7 @@
   </div>
 
   <div  class="w3-container">
-    <p *ngIf="this.totalPointsUsed !== 0">
+    <p *ngIf="this.totalPointsUsed > 0">
       Saved points retrieved: {{this.savedPointsFoundCount}} <br>
       Newly calculated points: {{this.newPointsFoundCount}} <br>
       Total points in graph: {{this.totalPointsUsed}} <br>
@@ -94,11 +94,12 @@
   <!-- TODO: Put some <layer> on the forms below to cut down on placeholder size.-->
   <!-- TODO: The errors never are displayed except for the ones way up top. -->
   <div class="w3-container">
-    <span *ngFor="let data of equationDatas">
+    <span *ngFor="let data of equationDatas; let index = index;">
       <p *ngIf="data.count > 0">
         Points found for {{data.equation}}: {{data.count}}.
           
-        <input class="clickables" type="button" (click)="clearPoints(data.equation)" value="Clear points">
+        <input class="clickables" type="button" (click)="clearPoints(data.equation)" value="Clear">
+        <input class="clickables" type="button" (click)="graphPoints(data.equation)" value="Graph">
       </p>
     </span>
   </div>

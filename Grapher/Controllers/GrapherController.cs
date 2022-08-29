@@ -5,9 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Grapher.Controllers
 {
-    // TODO: Instead of doing 2 SELECT ... FROM statements to retrieve points, do 1 nested statement.
-    // TODO: Try getting equationData at the start and looking through that for the info instead of
-    // doing FindTableName. This will help avoid constantly searching the DB.
     [ApiController]
     [Route("[controller]")]
     public class GrapherController : Controller
