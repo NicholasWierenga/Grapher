@@ -13,11 +13,9 @@ import { EquationData } from '../equationdata';
   styleUrls: ['./grapher.component.css']
 })
 
-// TODO: Fix bug where very large numbers 111111111111111 are turned into 111111111111111x.
-// TODO: Things like x^.00000001 turns into a 3D function because of simplifying into xe^-something
 // The above issue also works for large decimal multiple of x.
 export class GrapherComponent implements OnInit {
-  equation: string = "x*y";
+  equation: string = "";
   equationDatas!: EquationData[];
   xWindowLowerString!: string;
   xWindowUpperString!: string;
@@ -44,12 +42,6 @@ export class GrapherComponent implements OnInit {
     this.yStepsString = this.yStepsString || "100";
     this.xWindowLowerString = this.xWindowLowerString || "-10";
     this.yWindowLowerString = this.yWindowLowerString || "-10";
-    // TODO: This sets the y-windows for 2D as well, which can cut off parts of graph.
-    // The default behavior empty-valued 2D equations should be to let PlotlyJS decide y-windowing.
-    // A way to do this could be to change one of the functions handling variables to something
-    // that tacks on "y=" or "z=" and then return an equation instead.
-    // Then we can check if what the current equation has a either of those above strings
-    // to decide if we should use default y-windows or keep it empty.
 
     // Later in the program we convert to bignumber these, so we want to make sure users
     // aren't entering something that can't be converted.
@@ -535,7 +527,6 @@ export class GrapherComponent implements OnInit {
     return sortedPoints;
   }
 
-  // TODO: There's an issue when requesting too many points from the program. It's an ArrayBuffer error.
   getGraph(equation: string, points: Point[]): void {
     let layout: Partial<PlotlyJS.Layout> = {
       xaxis: {range: [this.xWindowLowerString, this.xWindowUpperString]}
@@ -550,13 +541,10 @@ export class GrapherComponent implements OnInit {
     this.graphData.push(trace);
 
     if (this.graphData.length === 1) {
-      //layout.showlegend = true; // PlotlyJS does not support legend showing legend for surface plots, so this only matters for 2D.
       PlotlyJS.newPlot("plotlyChart", [trace], layout);
     }
     else {
       PlotlyJS.addTraces("plotlyChart", [trace]);
-      // TODO: For 3D, get the name and keep tacking on each trace to the title string, then restyle.
-      // This should then display the equation above the graph. This is to get around the fact that surface doesn't allow legends.
       PlotlyJS.relayout("plotlyChart", layout);
     }
 

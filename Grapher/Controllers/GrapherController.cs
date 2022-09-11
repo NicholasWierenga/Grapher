@@ -21,7 +21,7 @@ namespace Grapher.Controllers
 
             if (data != null)
             {
-                return grapherDB.Set<Point>().FromSqlRaw(
+                return grapherDB.Points.FromSqlRaw(
                             $"SELECT * FROM [{data.Table_Name}]"
                         ).ToList();
             }
@@ -153,9 +153,7 @@ namespace Grapher.Controllers
         {
             try
             {
-                equationData = grapherDB.Equations.FromSqlRaw(
-                        $"SELECT * FROM [Equations]"
-                    ).ToList();
+                equationData = grapherDB.Equations.ToList();
             }
             catch { }
 
